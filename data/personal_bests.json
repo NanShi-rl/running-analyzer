@@ -1,0 +1,64 @@
+{
+  "户外跑步": {
+    "fastest_pace": {
+      "workout_id": "workout_040",
+      "pace": "05'57\"",
+      "pace_sec": 357,
+      "distance_km": 10.02,
+      "source": "IMG_5082.PNG,IMG_5083.PNG"
+    },
+    "longest_distance": {
+      "workout_id": "workout_022",
+      "dist": 12.03,
+      "duration": "01:29:28",
+      "source": "IMG_4926.PNG"
+    },
+    "best_5k": {
+      "workout_id": "workout_021",
+      "distance_km": 5.0,
+      "duration": "00:29:52",
+      "duration_sec": 1792,
+      "pace": "05'58\"",
+      "source": "IMG_4909.PNG,IMG_4910.PNG"
+    },
+    "best_10k": {
+      "workout_id": "workout_040",
+      "distance_km": 10.02,
+      "duration": "00:59:44",
+      "duration_sec": 3584,
+      "pace": "05'57\"",
+      "source": "IMG_5082.PNG,IMG_5083.PNG"
+    }
+  },
+  "室内跑步": {
+    "fastest_pace": {
+      "workout_id": "workout_014",
+      "pace": "05'59\"",
+      "pace_sec": 359,
+      "distance_km": 5.0,
+      "source": "IMG_4827.PNG"
+    },
+    "longest_distance": {
+      "workout_id": "workout_010",
+      "dist": 12.0,
+      "duration": "01:19:13",
+      "source": "IMG_4823.PNG"
+    },
+    "best_5k": {
+      "workout_id": "workout_014",
+      "distance_km": 5.0,
+      "duration": "00:29:56",
+      "duration_sec": 1796,
+      "pace": "05'59\"",
+      "source": "IMG_4827.PNG"
+    },
+    "best_10k": {
+      "workout_id": "workout_030",
+      "distance_km": 10.02,
+      "duration": "01:00:01",
+      "duration_sec": 3601,
+      "pace": "05'59\"",
+      "source": "IMG_4976.PNG,IMG_4977.PNG"
+    }
+  }
+}

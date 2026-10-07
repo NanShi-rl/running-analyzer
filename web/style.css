@@ -1,0 +1,68 @@
+/* Modern Custom UI Styling */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.15s ease-out forwards;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 1);
+}
+
+/* Focus outline glow */
+input:focus, select:focus {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Tab button styling */
+.tab-btn {
+  cursor: pointer;
+  user-select: none;
+}
+
+.tab-btn.active {
+  background-color: rgb(79 70 229);
+  color: #ffffff;
+}
+
+/* PB Card styles */
+.pb-card {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pb-card:hover {
+  transform: translateY(-2px);
+}
+
+/* Timeline dot styling */
+.timeline-dot {
+  position: absolute;
+  left: -21px;
+  top: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}

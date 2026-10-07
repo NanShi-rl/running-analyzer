@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Backups
+*.bak
+*.tmp
+
+# OS & Workspace
+.DS_Store
+.DS_Store?
+._*
+.vscode/
+.idea/
+.bob/
