@@ -1,67 +1,430 @@
-/* Modern Custom UI Styling */
+/* IBM Carbon Design System (Gray 100 / Gray 90 Dark Theme) Styling */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* Carbon Design Tokens (g100 theme) */
+  --cds-background: #161616;
+  --cds-layer-01: #262626;
+  --cds-layer-02: #393939;
+  --cds-layer-03: #525252;
+  --cds-layer-hover-01: #353535;
+  --cds-layer-hover-02: #4c4c4c;
+  --cds-layer-selected-01: #3f3f3f;
+  
+  --cds-field-01: #262626;
+  --cds-field-02: #393939;
+  --cds-border-subtle-01: #393939;
+  --cds-border-subtle-02: #525252;
+  --cds-border-strong-01: #6f6f6f;
+  --cds-border-interactive: #0f62fe;
+
+  --cds-text-primary: #f4f4f4;
+  --cds-text-secondary: #c6c6c6;
+  --cds-text-placeholder: #6f6f6f;
+  --cds-text-helper: #8d8d8d;
+  --cds-text-on-color: #ffffff;
+
+  --cds-interactive-01: #0f62fe;
+  --cds-interactive-hover: #0353e9;
+  --cds-interactive-active: #002d9c;
+  --cds-danger-01: #da1e28;
+  --cds-danger-hover: #ba1b23;
+  --cds-support-success: #24a148;
+  --cds-support-warning: #f1c21b;
+  --cds-support-info: #0043ce;
+
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', Menlo, Monaco, Consolas, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--cds-background);
+  color: var(--cds-text-primary);
+  margin: 0;
+  padding: 0;
+}
+
+/* Carbon Shell Header */
+.carbon-header {
+  height: 48px;
+  background-color: #161616;
+  border-bottom: 1px solid #393939;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 8000;
+}
+
+.carbon-header-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #f4f4f4;
+  letter-spacing: 0.16px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.carbon-header-title .prefix {
+  font-weight: 400;
+  color: #c6c6c6;
+}
+
+/* Carbon Navigation Tabs */
+.carbon-tabs-container {
+  display: flex;
+  background-color: #161616;
+  border-bottom: 1px solid #393939;
+  height: 40px;
+}
+
+.carbon-tab-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 1rem;
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: #c6c6c6;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.11s cubic-bezier(0.2, 0, 0.38, 0.9);
+  user-select: none;
+}
+
+.carbon-tab-item:hover {
+  color: #f4f4f4;
+  background-color: #262626;
+}
+
+.carbon-tab-item.active {
+  color: #f4f4f4;
+  font-weight: 600;
+  border-bottom: 2px solid #0f62fe;
+}
+
+/* Carbon Tile / Card Container */
+.carbon-tile {
+  background-color: var(--cds-layer-01);
+  padding: 1rem;
+  border: 1px solid var(--cds-border-subtle-01);
+  position: relative;
+  transition: background-color 0.11s cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+
+.carbon-tile-clickable {
+  cursor: pointer;
+}
+
+.carbon-tile-clickable:hover {
+  background-color: var(--cds-layer-hover-01);
+  border-color: #0f62fe;
+}
+
+.carbon-tile-clickable:active {
+  background-color: var(--cds-layer-selected-01);
+}
+
+/* Carbon Metric Tile */
+.carbon-metric-title {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--cds-text-helper);
+  text-transform: uppercase;
+  letter-spacing: 0.32px;
+}
+
+.carbon-metric-value {
+  font-size: 1.75rem;
+  font-weight: 300;
+  color: var(--cds-text-primary);
+  line-height: 1.25;
+  margin-top: 0.25rem;
+}
+
+.carbon-metric-subtext {
+  font-size: 0.75rem;
+  color: var(--cds-text-secondary);
+  margin-top: 0.25rem;
+}
+
+/* Carbon Buttons */
+.carbon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  height: 32px;
+  padding: 0 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.11s cubic-bezier(0.2, 0, 0.38, 0.9);
+  text-decoration: none;
+}
+
+.carbon-btn-primary {
+  background-color: #0f62fe;
+  color: #ffffff;
+}
+
+.carbon-btn-primary:hover {
+  background-color: #0353e9;
+}
+
+.carbon-btn-primary:active {
+  background-color: #002d9c;
+}
+
+.carbon-btn-secondary {
+  background-color: #393939;
+  color: #ffffff;
+}
+
+.carbon-btn-secondary:hover {
+  background-color: #4c4c4c;
+}
+
+.carbon-btn-secondary:active {
+  background-color: #6f6f6f;
+}
+
+.carbon-btn-ghost {
+  background-color: transparent;
+  color: #0f62fe;
+}
+
+.carbon-btn-ghost:hover {
+  background-color: #262626;
+  color: #4589ff;
+}
+
+.carbon-btn-danger {
+  background-color: #da1e28;
+  color: #ffffff;
+}
+
+.carbon-btn-danger:hover {
+  background-color: #ba1b23;
+}
+
+/* Carbon Inputs & Selects */
+.carbon-input {
+  background-color: #262626;
+  border: none;
+  border-bottom: 1px solid #8d8d8d;
+  color: #f4f4f4;
+  height: 32px;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  font-family: var(--font-sans);
+  outline: none;
+  transition: all 0.11s cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+
+.carbon-input:focus {
+  outline: 2px solid #0f62fe;
+  outline-offset: -2px;
+}
+
+.carbon-select {
+  background-color: #262626;
+  border: none;
+  border-bottom: 1px solid #8d8d8d;
+  color: #f4f4f4;
+  height: 32px;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  font-family: var(--font-sans);
+  outline: none;
+  cursor: pointer;
+}
+
+.carbon-select:focus {
+  outline: 2px solid #0f62fe;
+  outline-offset: -2px;
+}
+
+/* Carbon Data Table */
+.carbon-table-container {
+  background-color: #161616;
+  border: 1px solid #393939;
+  overflow-x: auto;
+}
+
+.carbon-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.75rem;
+}
+
+.carbon-table th {
+  background-color: #262626;
+  color: #c6c6c6;
+  font-weight: 600;
+  height: 40px;
+  padding: 0 0.75rem;
+  border-bottom: 1px solid #393939;
+  white-space: nowrap;
+}
+
+.carbon-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.carbon-table th.sortable:hover {
+  background-color: #353535;
+  color: #ffffff;
+}
+
+.carbon-table td {
+  height: 40px;
+  padding: 0.375rem 0.75rem;
+  border-bottom: 1px solid #262626;
+  color: #f4f4f4;
+}
+
+.carbon-table tr:hover td {
+  background-color: #262626;
+}
+
+/* Carbon Tag / Badge */
+.carbon-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  border-radius: 10px;
+  line-height: 1;
+}
+
+.carbon-tag-green {
+  background-color: #0e6027;
+  color: #6fdc8c;
+}
+
+.carbon-tag-blue {
+  background-color: #0043ce;
+  color: #a6c8ff;
+}
+
+.carbon-tag-purple {
+  background-color: #6929c4;
+  color: #d4bbff;
+}
+
+.carbon-tag-warm-gray {
+  background-color: #393939;
+  color: #e0e0e0;
+}
+
+.carbon-tag-red {
+  background-color: #a2191f;
+  color: #ffb3b8;
+}
+
+.carbon-tag-cyan {
+  background-color: #00539a;
+  color: #82cfff;
+}
+
+.carbon-tag-yellow {
+  background-color: #8a3800;
+  color: #fddc69;
+}
+
+/* Utility overrides */
+.hidden {
+  display: none !important;
+}
+
+/* Carbon Modal Styling */
+.carbon-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(22, 22, 22, 0.7);
+  backdrop-filter: blur(2px);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.carbon-modal-container {
+  background-color: #262626;
+  border: 1px solid #393939;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.6);
+  width: 100%;
+  display: flex;
+  flex-col: column;
+}
+
+.carbon-modal-header {
+  padding: 1rem 1.5rem;
+  background-color: #161616;
+  border-bottom: 1px solid #393939;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.carbon-modal-footer {
+  padding: 0.75rem 1.5rem;
+  background-color: #161616;
+  border-top: 1px solid #393939;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Animation */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.15s ease-out forwards;
+  animation: fadeIn 0.15s cubic-bezier(0.2, 0, 0.38, 0.9) forwards;
 }
 
-/* Custom scrollbars */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.6);
+  background: #161616;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(51, 65, 85, 0.8);
+  background: #393939;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(71, 85, 105, 1);
+  background: #525252;
 }
 
-/* Focus outline glow */
-input:focus, select:focus {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-}
-
-/* Tab button styling */
-.tab-btn {
-  cursor: pointer;
-  user-select: none;
-}
-
-.tab-btn.active {
-  background-color: rgb(79 70 229);
-  color: #ffffff;
-}
-
-/* PB Card styles */
-.pb-card {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.pb-card:hover {
-  transform: translateY(-2px);
-}
-
-/* Timeline dot styling */
+/* Timeline dot */
 .timeline-dot {
   position: absolute;
   left: -21px;
-  top: 10px;
+  top: 12px;
   width: 10px;
   height: 10px;
   border-radius: 50%;

@@ -136,6 +136,31 @@ class RunningServerHandler(SimpleHTTPRequestHandler):
             })
             return
 
+        # Direct download of CSV file or export endpoint
+        if path == "/api/export/csv" or path == "/data/running_records.csv":
+            if os.path.exists(CSV_FILE):
+                with open(CSV_FILE, "rb") as f:
+                    csv_data = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/csv; charset=utf-8")
+                self.send_header("Content-Disposition", 'attachment; filename="running_records.csv"')
+                self.send_header("Content-Length", str(len(csv_data)))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+                self.wfile.write(csv_data)
+                return
+            else:
+                self._send_json({"success": False, "error": "CSV file not found"}, status=404)
+                return
+
+        # Handle favicon request gracefully if not present in web folder
+        if path == "/favicon.ico":
+            favicon_path = os.path.join(WEB_DIR, "favicon.ico")
+            if not os.path.exists(favicon_path):
+                self.send_response(204)  # No Content
+                self.end_headers()
+                return
+
         # Serve static web files
         return super().do_GET()
 

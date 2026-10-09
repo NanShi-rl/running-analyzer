@@ -2,11 +2,11 @@
 
 ## 1. Executive Summary & Goals
 
-This project provides an interactive Single Page Application (SPA) backed by a lightweight Python REST server (`server.py`) and a unified CSV data store (`data/running_records.csv`).
+This project provides an interactive Single Page Application (SPA) designed according to the **IBM Carbon Design System (Carbon Gray 100 / Gray 90 Dark Theme)**, backed by a lightweight Python REST server ([`server.py`](server.py:1)) and a unified CSV data store ([`data/running_records.csv`](data/running_records.csv:1)).
 
 The SPA is organized into two primary tabs:
-1. **Tab 1: 训练分析看板 (Analytics Dashboard)** — Front page displaying aggregated KPIs, focused progression charts (Monthly Distance with total numbers on top, VO2 Max Breakthrough Trajectory, and Zone Time Distribution Pie Chart with percentages), alongside an **Indoor vs Outdoor Best Records** section with interactive progressive milestone history modals and side progression charts (5K, 10K, Longest Distance, Longest Duration calculated from continuous by-km splits and workout summaries).
-2. **Tab 2: 训练记录明细 (Workouts & Split Editor)** — The workout list table, multi-condition search & filtering toolbar, in-place workout metadata editor modal, and the granular By-KM split editor modal with automatic pace/stride computation.
+1. **Tab 1: 📊 训练分析看板 (Analytics Dashboard)** — Front page displaying aggregated KPIs, focused progression charts (Monthly Distance stacked bar chart with total kilometer numbers on top, VO2 Max Breakthrough Trajectory, Separated Pace and Heart Rate Trend Charts, and Heart Rate Zone Time Distribution Pie Chart with percentages), alongside an **Indoor vs Outdoor Best Records** section with interactive progressive milestone history modals and side progression charts (5K, 10K, Longest Distance, Longest Duration calculated from continuous by-km splits and workout summaries, strictly excluding interval runs).
+2. **Tab 2: 🏃‍♂️ 训练记录明细与编辑 (Workouts & Split Editor)** — The workout list table, multi-condition search & filtering toolbar, in-place workout metadata editor modal, and the granular By-KM split editor modal with automatic pace/stride computation.
 
 ---
 

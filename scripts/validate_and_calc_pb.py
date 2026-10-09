@@ -15,18 +15,62 @@ def load_dataset(csv_path: str) -> List[Dict[str, Any]]:
     return records
 
 
+def parse_time_sec(time_str: str) -> int:
+    if not time_str:
+        return 0
+    parts = time_str.strip().split(":")
+    if len(parts) == 2:
+        return int(parts[0]) * 60 + int(parts[1])
+    elif len(parts) == 3:
+        return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+    return 0
+
+
+def find_best_continuous(record: Dict[str, Any], target_dist: int):
+    splits_raw = record.get("splits_by_km_json", "")
+    if splits_raw and splits_raw.strip().startswith("["):
+        try:
+            splits = json.loads(splits_raw)
+            if isinstance(splits, list) and len(splits) >= target_dist:
+                best_sec = None
+                best_start = 1
+                best_end = target_dist
+                for i in range(len(splits) - target_dist + 1):
+                    win = splits[i : i + target_dist]
+                    win_sec = sum(parse_time_sec(s.get("duration", s.get("split_duration", ""))) for s in win)
+                    if win_sec > 0:
+                        if best_sec is None or win_sec < best_sec:
+                            best_sec = win_sec
+                            best_start = i + 1
+                            best_end = i + target_dist
+                if best_sec is not None:
+                    return {"seconds": best_sec, "start_km": best_start, "end_km": best_end, "from_splits": True}
+        except Exception:
+            pass
+
+    # Fallback to workout total
+    dist = float(record["distance_km"]) if record.get("distance_km") else 0
+    dur_sec = parse_time_sec(record.get("active_duration", ""))
+    if dur_sec > 0:
+        if target_dist == 5 and 4.8 <= dist <= 5.5:
+            return {"seconds": dur_sec, "distance": dist, "from_splits": False}
+        if target_dist == 10 and 9.8 <= dist <= 10.5:
+            return {"seconds": dur_sec, "distance": dist, "from_splits": False}
+    return None
+
+
 def calculate_pbs(records: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Calculate personal bests for indoor vs outdoor separately."""
     pbs = {
         "户外跑步": {
-            "fastest_pace": None,
             "longest_distance": None,
+            "longest_time": None,
             "best_5k": None,
             "best_10k": None,
         },
         "室内跑步": {
-            "fastest_pace": None,
             "longest_distance": None,
+            "longest_time": None,
             "best_5k": None,
             "best_10k": None,
         }
@@ -37,50 +81,54 @@ def calculate_pbs(records: List[Dict[str, Any]]) -> Dict[str, Any]:
         if act not in pbs:
             act = "户外跑步"
             
-        dist = float(r["distance_km"]) if r.get("distance_km") else None
-        pace_sec = int(r["avg_pace_sec"]) if r.get("avg_pace_sec") else None
-        dur_sec = int(r["active_duration_sec"]) if r.get("active_duration_sec") else None
+        dist = float(r["distance_km"]) if r.get("distance_km") else 0
+        dur_sec = parse_time_sec(r.get("active_duration", ""))
         
-        if pace_sec and (pbs[act]["fastest_pace"] is None or pace_sec < pbs[act]["fastest_pace"]["pace_sec"]):
-            pbs[act]["fastest_pace"] = {
-                "workout_id": r["workout_id"],
-                "pace": r["avg_pace"],
-                "pace_sec": pace_sec,
-                "distance_km": dist,
-                "source": r["source_files"]
-            }
-            
-        if dist and (pbs[act]["longest_distance"] is None or dist > pbs[act]["longest_distance"]["dist"]):
+        # Longest distance
+        if dist > 0 and (pbs[act]["longest_distance"] is None or dist > pbs[act]["longest_distance"]["dist"]):
             pbs[act]["longest_distance"] = {
-                "workout_id": r["workout_id"],
+                "workout_id": r.get("workout_id"),
+                "date": r.get("date"),
                 "dist": dist,
-                "duration": r["active_duration"],
-                "source": r["source_files"]
+                "duration": r.get("active_duration"),
+                "pace": r.get("avg_pace")
+            }
+
+        # Longest time
+        if dur_sec > 0 and (pbs[act]["longest_time"] is None or dur_sec > pbs[act]["longest_time"]["duration_sec"]):
+            pbs[act]["longest_time"] = {
+                "workout_id": r.get("workout_id"),
+                "date": r.get("date"),
+                "duration": r.get("active_duration"),
+                "duration_sec": dur_sec,
+                "dist": dist
             }
             
-        # 5K candidate (distance between 4.8 and 5.5 km or explicit PB)
-        if dist and 4.8 <= dist <= 5.5 and dur_sec:
-            if pbs[act]["best_5k"] is None or dur_sec < pbs[act]["best_5k"]["duration_sec"]:
-                pbs[act]["best_5k"] = {
-                    "workout_id": r["workout_id"],
-                    "distance_km": dist,
-                    "duration": r["active_duration"],
-                    "duration_sec": dur_sec,
-                    "pace": r["avg_pace"],
-                    "source": r["source_files"]
-                }
-                
-        # 10K candidate (distance between 9.8 and 10.5 km or explicit PB)
-        if dist and 9.8 <= dist <= 10.5 and dur_sec:
-            if pbs[act]["best_10k"] is None or dur_sec < pbs[act]["best_10k"]["duration_sec"]:
-                pbs[act]["best_10k"] = {
-                    "workout_id": r["workout_id"],
-                    "distance_km": dist,
-                    "duration": r["active_duration"],
-                    "duration_sec": dur_sec,
-                    "pace": r["avg_pace"],
-                    "source": r["source_files"]
-                }
+        # Exclude interval runs for 5K and 10K PBs
+        if "间歇跑" in (r.get("training_type") or ""):
+            continue
+
+        # 5K
+        res5 = find_best_continuous(r, 5)
+        if res5 and (pbs[act]["best_5k"] is None or res5["seconds"] < pbs[act]["best_5k"]["duration_sec"]):
+            pbs[act]["best_5k"] = {
+                "workout_id": r.get("workout_id"),
+                "date": r.get("date"),
+                "duration_sec": res5["seconds"],
+                "duration_formatted": f"{res5['seconds'] // 60}:{res5['seconds'] % 60:02d}",
+                "detail": res5
+            }
+
+        # 10K
+        res10 = find_best_continuous(r, 10)
+        if res10 and (pbs[act]["best_10k"] is None or res10["seconds"] < pbs[act]["best_10k"]["duration_sec"]):
+            pbs[act]["best_10k"] = {
+                "workout_id": r.get("workout_id"),
+                "date": r.get("date"),
+                "duration_sec": res10["seconds"],
+                "duration_formatted": f"{res10['seconds'] // 60}:{res10['seconds'] % 60:02d}",
+                "detail": res10
+            }
 
     return pbs
 
