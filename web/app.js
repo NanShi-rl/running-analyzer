@@ -595,8 +595,14 @@ const stackedTotalPlugin = {
   afterDatasetsDraw(chart) {
     if (chart.config.type !== "bar") return;
     const { ctx, scales: { x, y } } = chart;
-    const metaLast = chart.getDatasetMeta(chart.data.datasets.length - 1);
-    if (!metaLast) return;
+    
+    // Find the bar datasets to compute bar sum
+    const barDatasets = chart.data.datasets.filter(d => (d.type || chart.config.type) === "bar");
+    if (barDatasets.length === 0) return;
+
+    // Use the meta of the first bar dataset for horizontal X positioning
+    const metaBar = chart.getDatasetMeta(0);
+    if (!metaBar || !metaBar.data) return;
 
     ctx.save();
     ctx.textAlign = "center";
@@ -605,15 +611,15 @@ const stackedTotalPlugin = {
     ctx.fillStyle = "#ffffff";
 
     chart.data.labels.forEach((label, index) => {
-      let total = 0;
-      chart.data.datasets.forEach(dataset => {
-        total += (dataset.data[index] || 0);
+      let totalDist = 0;
+      barDatasets.forEach(dataset => {
+        totalDist += (dataset.data[index] || 0);
       });
 
-      if (total > 0) {
-        const xPos = metaLast.data[index].x;
-        const yPos = y.getPixelForValue(total);
-        ctx.fillText(`${total.toFixed(1)} km`, xPos, yPos - 5);
+      if (totalDist > 0 && metaBar.data[index]) {
+        const xPos = metaBar.data[index].x;
+        const yPos = y.getPixelForValue(totalDist);
+        ctx.fillText(`${totalDist.toFixed(1)} km`, xPos, yPos - 5);
       }
     });
 
@@ -622,20 +628,20 @@ const stackedTotalPlugin = {
 };
 
 /**
- * 1. Monthly Distance Stacked Bar Chart with Combined Total on Top
+ * 1. Monthly Distance Stacked Bar Chart with Combined Total on Top & Average Pace Line
  */
 function renderMonthlyDistanceChart() {
   const canvas = document.getElementById("chart-monthly-distance");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
 
-  // Group distance by Month (YYYY-MM)
+  // Group distance & duration by Month (YYYY-MM)
   const monthMap = {};
   allWorkouts.forEach(w => {
     if (!w.date) return;
     const month = w.date.substring(0, 7); // "2026-06"
     if (!monthMap[month]) {
-      monthMap[month] = { outdoor: 0, indoor: 0, total: 0 };
+      monthMap[month] = { outdoor: 0, indoor: 0, total: 0, durationSec: 0, distForPace: 0 };
     }
     const dist = parseFloat(w.distance_km) || 0;
     if (w.activity_type === "室内跑步") {
@@ -644,11 +650,38 @@ function renderMonthlyDistanceChart() {
       monthMap[month].outdoor += dist;
     }
     monthMap[month].total += dist;
+
+    // Duration in seconds for calculating distance-weighted average pace
+    const durSec = timeStringToSeconds(w.active_duration);
+    if (durSec > 0 && dist > 0) {
+      monthMap[month].durationSec += durSec;
+      monthMap[month].distForPace += dist;
+    } else if (w.avg_pace && dist > 0) {
+      const paceSec = timeStringToSeconds(w.avg_pace);
+      if (paceSec > 0) {
+        monthMap[month].durationSec += paceSec * dist;
+        monthMap[month].distForPace += dist;
+      }
+    }
   });
 
   const sortedMonths = Object.keys(monthMap).sort();
   const outdoorData = sortedMonths.map(m => parseFloat(monthMap[m].outdoor.toFixed(1)));
   const indoorData = sortedMonths.map(m => parseFloat(monthMap[m].indoor.toFixed(1)));
+
+  // Calculate distance-weighted average pace (seconds per km) for each month
+  const paceSecondsData = sortedMonths.map(m => {
+    const item = monthMap[m];
+    if (item.distForPace > 0 && item.durationSec > 0) {
+      return Math.round(item.durationSec / item.distForPace);
+    }
+    return null;
+  });
+
+  // Calculate min/max pace seconds for setting inverted y-axis bounds
+  const validPaceSecs = paceSecondsData.filter(p => p !== null && p > 0);
+  const minPaceSec = validPaceSecs.length > 0 ? Math.min(...validPaceSecs) : 300;
+  const maxPaceSec = validPaceSecs.length > 0 ? Math.max(...validPaceSecs) : 600;
 
   // Calculate highest monthly total to set reasonable y-axis headroom for labels
   const maxMonthlyTotal = Math.max(...sortedMonths.map(m => monthMap[m].total), 0);
@@ -662,20 +695,44 @@ function renderMonthlyDistanceChart() {
       labels: sortedMonths,
       datasets: [
         {
+          type: "line",
+          label: "平均配速 (min/km)",
+          data: paceSecondsData,
+          yAxisID: "yPace",
+          borderColor: "#f1c21b",
+          backgroundColor: "#f1c21b",
+          borderWidth: 2.5,
+          pointBackgroundColor: "#f1c21b",
+          pointBorderColor: "#161616",
+          pointBorderWidth: 2,
+          pointRadius: 4.5,
+          pointHoverRadius: 6.5,
+          tension: 0.25,
+          order: 1
+        },
+        {
+          type: "bar",
           label: "户外跑步 (km)",
           data: outdoorData,
+          yAxisID: "y",
           backgroundColor: "rgba(16, 185, 129, 0.8)",
           borderColor: "#10b981",
           borderWidth: 1,
-          borderRadius: 6
+          borderRadius: 4,
+          stack: "distanceStack",
+          order: 2
         },
         {
+          type: "bar",
           label: "室内跑步 (km)",
           data: indoorData,
+          yAxisID: "y",
           backgroundColor: "rgba(99, 102, 241, 0.8)",
           borderColor: "#6366f1",
           borderWidth: 1,
-          borderRadius: 6
+          borderRadius: 4,
+          stack: "distanceStack",
+          order: 2
         }
       ]
     },
@@ -687,16 +744,46 @@ function renderMonthlyDistanceChart() {
       },
       scales: {
         x: {
-          stacked: true,
           grid: { color: "rgba(51, 65, 85, 0.4)" },
           ticks: { color: "#94a3b8", font: { size: 11 } }
         },
         y: {
+          type: "linear",
+          position: "left",
           stacked: true,
           beginAtZero: true,
           suggestedMax: maxMonthlyTotal * 1.15,
           grid: { color: "rgba(51, 65, 85, 0.4)" },
-          ticks: { color: "#94a3b8", font: { size: 11 } }
+          ticks: {
+            color: "#94a3b8",
+            font: { size: 11 },
+            callback: (val) => `${val} km`
+          },
+          title: {
+            display: true,
+            text: "跑量 (km)",
+            color: "#94a3b8",
+            font: { size: 11 }
+          }
+        },
+        yPace: {
+          type: "linear",
+          position: "right",
+          reverse: true, // Inverted: faster pace (lower seconds) is higher up
+          min: Math.max(240, Math.floor((minPaceSec - 45) / 30) * 30),
+          max: Math.ceil((maxPaceSec + 45) / 30) * 30,
+          grid: { drawOnChartArea: false }, // Avoid cluttering grid lines
+          ticks: {
+            color: "#f1c21b",
+            font: { size: 11 },
+            callback: (val) => secondsToPaceString(val)
+          },
+          title: {
+            display: true,
+            text: "平均配速",
+            color: "#f1c21b",
+            font: { size: 11 }
+          }
         }
       },
       plugins: {
@@ -705,9 +792,20 @@ function renderMonthlyDistanceChart() {
         },
         tooltip: {
           callbacks: {
+            label: (item) => {
+              if (item.dataset.type === "line") {
+                const paceStr = item.raw ? secondsToPaceString(item.raw) : "--";
+                return `月度平均配速: ${paceStr} /km`;
+              }
+              return `${item.dataset.label}: ${item.raw} km`;
+            },
             footer: (items) => {
-              const total = items.reduce((acc, curr) => acc + curr.raw, 0);
-              return `月度合并总跑量: ${total.toFixed(1)} km`;
+              const barItems = items.filter(it => it.dataset.type === "bar");
+              if (barItems.length > 0) {
+                const total = barItems.reduce((acc, curr) => acc + curr.raw, 0);
+                return `月度合并总跑量: ${total.toFixed(1)} km`;
+              }
+              return "";
             }
           }
         }
