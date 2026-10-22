@@ -76,10 +76,20 @@ function autoCalcWorkoutPace() {
   }
 }
 
-// Fetch all records & stats from API
+// Fetch all records & stats from API (with static fallback for GitHub Pages)
 async function fetchData() {
   try {
-    const res = await fetch("/api/records");
+    let res = null;
+    // 1. Try local backend server API first
+    try {
+      res = await fetch("/api/records");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (apiErr) {
+      // 2. If API is not available (e.g. GitHub Pages / static hosting), fall back to static data/records.json
+      res = await fetch("data/records.json");
+      if (!res.ok) throw new Error(`Static data load failed: HTTP ${res.status}`);
+    }
+
     const json = await res.json();
     if (json.success) {
       allWorkouts = json.data;
@@ -95,7 +105,7 @@ async function fetchData() {
     }
   } catch (err) {
     console.error("Fetch error:", err);
-    showToast("无法连接后端服务，请确认 server.py 已启动", "error");
+    showToast("无法加载跑步数据，请确认后端已启动或静态数据已生成", "error");
   }
 }
 
@@ -1699,7 +1709,8 @@ async function handleDeleteWorkout(workoutId) {
 
 // Export CSV
 function exportCsvFile() {
-  window.open("/data/running_records.csv", "_blank");
+  // Support both server API endpoint and static deployment path
+  window.open("data/running_records.csv", "_blank");
 }
 
 function refreshData() {
