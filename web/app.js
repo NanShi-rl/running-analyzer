@@ -1457,8 +1457,8 @@ async function handleSaveWorkout(event) {
     }
 
     const commitMsg = payload.workout_id && existingIdx >= 0
-      ? `feat: update workout ${payload.workout_id} [skip ci]`
-      : `feat: log workout ${payload.workout_id} on ${payload.date} [skip ci]`;
+      ? `feat: update workout ${payload.workout_id}`
+      : `feat: log workout ${payload.workout_id} on ${payload.date}`;
 
     await commitRecordsToGitHub(updatedWorkouts, commitMsg);
 
@@ -1754,7 +1754,7 @@ async function saveCurrentSplits() {
       splits_by_km_json: JSON.stringify(currentSplitsList)
     };
 
-    await commitRecordsToGitHub(updatedWorkouts, `feat: update splits for ${workoutId} [skip ci]`);
+    await commitRecordsToGitHub(updatedWorkouts, `feat: update splits for ${workoutId}`);
 
     allWorkouts = updatedWorkouts;
     updateHeaderKPIs();
@@ -1809,7 +1809,7 @@ async function handleDeleteWorkout(workoutId) {
     showToast("正在通过 GitHub API 同步删除操作至仓库...", "success");
 
     let updatedWorkouts = allWorkouts.filter(w => w.workout_id !== workoutId);
-    await commitRecordsToGitHub(updatedWorkouts, `feat: delete workout ${workoutId} [skip ci]`);
+    await commitRecordsToGitHub(updatedWorkouts, `feat: delete workout ${workoutId}`);
 
     allWorkouts = updatedWorkouts;
     updateHeaderKPIs();
@@ -1994,7 +1994,7 @@ async function commitRecordsToGitHub(records, commitMessage) {
 
   // Step 3: PUT request to create/update file
   const putPayload = {
-    message: commitMessage || `chore: update running records [skip ci]`,
+    message: commitMessage || `chore: update running records`,
     content: base64Content,
     branch: branch
   };
