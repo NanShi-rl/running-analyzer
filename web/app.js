@@ -22,10 +22,32 @@ let pbRecordsMap = {};
 let currentSortColumn = "date";
 let currentSortDirection = "desc"; // "asc" or "desc"
 
+// CSV schema column definition
+const CSV_COLUMNS = [
+  "workout_id", "date", "start_time", "activity_type", "route_name",
+  "distance_km", "active_duration", "avg_pace", "avg_heart_rate",
+  "max_heart_rate", "vo2_max", "hr_zone_warmup_pct",
+  "hr_zone_aerobic_endurance_pct", "hr_zone_aerobic_power_pct",
+  "hr_zone_threshold_pct", "hr_zone_anaerobic_pct", "avg_cadence_spm",
+  "avg_stride_length_m", "avg_power_watts", "avg_ground_contact_time_ms",
+  "max_ground_contact_time_ms", "min_ground_contact_time_ms",
+  "avg_flight_time_ms", "max_flight_time_ms", "min_flight_time_ms",
+  "avg_vertical_oscillation_cm", "max_vertical_oscillation_cm",
+  "min_vertical_oscillation_cm", "elevation_gain_m", "calories_kcal",
+  "training_load", "weather", "temperature_c", "records_achieved",
+  "notes", "training_type", "splits_by_km_json"
+];
+
+// GitHub Sync configuration keys
+const GITHUB_TOKEN_KEY = "running_analyzer_gh_token";
+const GITHUB_REPO_KEY = "running_analyzer_gh_repo"; // e.g. "username/running-analyzer"
+const GITHUB_BRANCH_KEY = "running_analyzer_gh_branch"; // default "main"
+
 // Initialize on DOM ready
 document.addEventListener("DOMContentLoaded", () => {
   fetchData();
   setupEventListeners();
+  updateGitHubSyncStatusUI();
 });
 
 function setupEventListeners() {
@@ -1398,22 +1420,62 @@ async function handleSaveWorkout(event) {
   };
 
   try {
-    const res = await fetch("/api/records", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const result = await res.json();
-    if (result.success) {
-      showToast("记录保存成功，已同步至 CSV！");
-      closeWorkoutModal();
-      await fetchData();
-    } else {
-      showToast("保存失败: " + result.error, "error");
+    let savedSuccessfully = false;
+
+    // 1. Try local backend server API first
+    try {
+      const res = await fetch("/api/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success) {
+          showToast("记录保存成功，已同步至本地 CSV！");
+          savedSuccessfully = true;
+          closeWorkoutModal();
+          await fetchData();
+          return;
+        }
+      }
+    } catch (apiErr) {
+      // Local server not running or network failed, fallback to GitHub API
     }
+
+    // 2. Fallback to GitHub REST API commit (for GitHub Pages hosting)
+    showToast("正在通过 GitHub API 同步提交至仓库...", "success");
+
+    // Prepare new list in memory
+    const existingIdx = allWorkouts.findIndex(w => w.workout_id === payload.workout_id);
+    let updatedWorkouts = [...allWorkouts];
+    if (existingIdx >= 0) {
+      updatedWorkouts[existingIdx] = { ...updatedWorkouts[existingIdx], ...payload };
+    } else {
+      // New record, insert at beginning
+      updatedWorkouts.unshift(payload);
+    }
+
+    const commitMsg = payload.workout_id && existingIdx >= 0
+      ? `feat: update workout ${payload.workout_id} [skip ci]`
+      : `feat: log workout ${payload.workout_id} on ${payload.date} [skip ci]`;
+
+    await commitRecordsToGitHub(updatedWorkouts, commitMsg);
+
+    allWorkouts = updatedWorkouts;
+    updateHeaderKPIs();
+    computeAllPersonalBests();
+    if (currentActiveTab === "analytics") {
+      renderAllAnalyticsCharts();
+    } else {
+      filterAndRenderTable();
+    }
+
+    showToast("已成功提交至 GitHub 仓库！GitHub Actions 将在稍后自动重新部署静态页面。");
+    closeWorkoutModal();
   } catch (err) {
     console.error("Save workout error:", err);
-    showToast("网络请求异常，保存失败", "error");
+    showToast(err.message || "网络请求异常，保存失败", "error");
   }
 }
 
@@ -1657,22 +1719,57 @@ async function saveCurrentSplits() {
 
   const workoutId = currentWorkoutForSplits.workout_id;
   try {
-    const res = await fetch(`/api/records/${workoutId}/splits`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ splits: currentSplitsList })
-    });
-    const result = await res.json();
-    if (result.success) {
-      showToast("分段明细已成功保存并同步！");
-      closeSplitsModal();
-      await fetchData();
-    } else {
-      showToast("保存失败: " + result.error, "error");
+    // 1. Try local backend server API first
+    try {
+      const res = await fetch(`/api/records/${workoutId}/splits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ splits: currentSplitsList })
+      });
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success) {
+          showToast("分段明细已成功保存并同步！");
+          closeSplitsModal();
+          await fetchData();
+          return;
+        }
+      }
+    } catch (apiErr) {
+      // Local server not running or network failed, fallback to GitHub API
     }
+
+    // 2. Fallback to GitHub REST API commit
+    showToast("正在通过 GitHub API 同步分段明细至仓库...", "success");
+
+    const existingIdx = allWorkouts.findIndex(w => w.workout_id === workoutId);
+    if (existingIdx === -1) {
+      throw new Error(`未找到对应训练记录: ${workoutId}`);
+    }
+
+    let updatedWorkouts = [...allWorkouts];
+    updatedWorkouts[existingIdx] = {
+      ...updatedWorkouts[existingIdx],
+      splits: currentSplitsList,
+      splits_by_km_json: JSON.stringify(currentSplitsList)
+    };
+
+    await commitRecordsToGitHub(updatedWorkouts, `feat: update splits for ${workoutId} [skip ci]`);
+
+    allWorkouts = updatedWorkouts;
+    updateHeaderKPIs();
+    computeAllPersonalBests();
+    if (currentActiveTab === "analytics") {
+      renderAllAnalyticsCharts();
+    } else {
+      filterAndRenderTable();
+    }
+
+    showToast("分段明细已成功同步至 GitHub 仓库！");
+    closeSplitsModal();
   } catch (err) {
     console.error("Save splits error:", err);
-    showToast("网络请求异常，保存分段失败", "error");
+    showToast(err.message || "网络请求异常，保存分段失败", "error");
   }
 }
 
@@ -1690,20 +1787,44 @@ async function handleDeleteWorkout(workoutId) {
   }
 
   try {
-    const res = await fetch(`/api/records/${workoutId}`, {
-      method: "DELETE"
-    });
-    const result = await res.json();
-    if (result.success) {
-      showToast(`记录 [${workoutId}] 已成功删除！`);
-      closeWorkoutModal();
-      await fetchData();
-    } else {
-      showToast("删除失败: " + result.error, "error");
+    // 1. Try local backend server API first
+    try {
+      const res = await fetch(`/api/records/${workoutId}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success) {
+          showToast(`记录 [${workoutId}] 已成功删除！`);
+          closeWorkoutModal();
+          await fetchData();
+          return;
+        }
+      }
+    } catch (apiErr) {
+      // Local server not running or network failed, fallback to GitHub API
     }
+
+    // 2. Fallback to GitHub REST API commit
+    showToast("正在通过 GitHub API 同步删除操作至仓库...", "success");
+
+    let updatedWorkouts = allWorkouts.filter(w => w.workout_id !== workoutId);
+    await commitRecordsToGitHub(updatedWorkouts, `feat: delete workout ${workoutId} [skip ci]`);
+
+    allWorkouts = updatedWorkouts;
+    updateHeaderKPIs();
+    computeAllPersonalBests();
+    if (currentActiveTab === "analytics") {
+      renderAllAnalyticsCharts();
+    } else {
+      filterAndRenderTable();
+    }
+
+    showToast(`记录 [${workoutId}] 已从 GitHub 仓库成功删除！`);
+    closeWorkoutModal();
   } catch (err) {
     console.error("Delete error:", err);
-    showToast("网络请求异常，删除失败", "error");
+    showToast(err.message || "网络请求异常，删除失败", "error");
   }
 }
 
@@ -1718,6 +1839,187 @@ function refreshData() {
   showToast("数据已刷新");
 }
 
+// ==============================================================
+// GITHUB REST API & CSV SERIALIZATION HELPERS (Option 1)
+// ==============================================================
+
+function getGitHubConfig() {
+  return {
+    token: localStorage.getItem(GITHUB_TOKEN_KEY) || "",
+    repo: localStorage.getItem(GITHUB_REPO_KEY) || "",
+    branch: localStorage.getItem(GITHUB_BRANCH_KEY) || "main"
+  };
+}
+
+function setGitHubConfig(token, repo, branch = "main") {
+  if (token) localStorage.setItem(GITHUB_TOKEN_KEY, token.trim());
+  else localStorage.removeItem(GITHUB_TOKEN_KEY);
+
+  if (repo) localStorage.setItem(GITHUB_REPO_KEY, repo.trim().replace(/^https?:\/\/github\.com\//, ""));
+  else localStorage.removeItem(GITHUB_REPO_KEY);
+
+  if (branch) localStorage.setItem(GITHUB_BRANCH_KEY, branch.trim());
+  else localStorage.setItem(GITHUB_BRANCH_KEY, "main");
+
+  updateGitHubSyncStatusUI();
+}
+
+function updateGitHubSyncStatusUI() {
+  const { token, repo } = getGitHubConfig();
+  const indicator = document.getElementById("gh-sync-status-indicator");
+  const badgeText = document.getElementById("gh-sync-status-text");
+
+  if (indicator && badgeText) {
+    if (token && repo) {
+      indicator.className = "w-2 h-2 rounded-full bg-[#24a148] animate-pulse";
+      badgeText.textContent = `已绑定 GitHub (${repo.split("/")[1] || repo})`;
+      badgeText.className = "text-[#6fdc8c] text-[11px]";
+    } else {
+      indicator.className = "w-2 h-2 rounded-full bg-[#8d8d8d]";
+      badgeText.textContent = "未配置 GitHub 写入 Token";
+      badgeText.className = "text-[#8d8d8d] text-[11px]";
+    }
+  }
+}
+
+function openGitHubSettingsModal() {
+  const modal = document.getElementById("modal-gh-settings");
+  if (!modal) return;
+  const { token, repo, branch } = getGitHubConfig();
+
+  // Try auto-inferring repo from URL if empty (e.g. username.github.io/repo-name)
+  let inferredRepo = repo;
+  if (!inferredRepo && window.location.hostname.endsWith("github.io")) {
+    const owner = window.location.hostname.split(".")[0];
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    const repoName = pathParts.length > 0 ? pathParts[0] : "";
+    if (owner && repoName) {
+      inferredRepo = `${owner}/${repoName}`;
+    }
+  }
+
+  document.getElementById("gh-input-token").value = token || "";
+  document.getElementById("gh-input-repo").value = inferredRepo || "";
+  document.getElementById("gh-input-branch").value = branch || "main";
+  modal.classList.remove("hidden");
+}
+
+function closeGitHubSettingsModal() {
+  const modal = document.getElementById("modal-gh-settings");
+  if (modal) modal.classList.add("hidden");
+}
+
+function handleSaveGitHubSettings(e) {
+  if (e) e.preventDefault();
+  const token = document.getElementById("gh-input-token").value;
+  const repo = document.getElementById("gh-input-repo").value;
+  const branch = document.getElementById("gh-input-branch").value || "main";
+
+  setGitHubConfig(token, repo, branch);
+  closeGitHubSettingsModal();
+  showToast(token ? "GitHub 写入配置已保存" : "GitHub Token 已清除");
+}
+
+/**
+ * Escape CSV field to RFC 4180 standard
+ */
+function escapeCsvField(val) {
+  if (val === null || val === undefined) return "";
+  const str = String(val);
+  if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+/**
+ * Serialize a list of workout records to CSV string
+ */
+function serializeRecordsToCsv(records) {
+  const header = CSV_COLUMNS.join(",");
+  const rows = records.map(r => {
+    return CSV_COLUMNS.map(col => {
+      if (col === "splits_by_km_json") {
+        if (r.splits && Array.isArray(r.splits) && r.splits.length > 0) {
+          return escapeCsvField(JSON.stringify(r.splits));
+        } else if (r.splits_by_km_json) {
+          return escapeCsvField(r.splits_by_km_json);
+        }
+        return "";
+      }
+      return escapeCsvField(r[col] !== undefined ? r[col] : "");
+    }).join(",");
+  });
+
+  return [header, ...rows].join("\n");
+}
+
+/**
+ * Commit data/running_records.csv to GitHub via GitHub Contents API
+ */
+async function commitRecordsToGitHub(records, commitMessage) {
+  const { token, repo, branch } = getGitHubConfig();
+  if (!token || !repo) {
+    throw new Error("请先点击顶部「GitHub 写入配置」输入 GitHub Token 和仓库名称，以便在 GitHub Pages 直接修改数据。");
+  }
+
+  const filePath = "data/running_records.csv";
+  const apiUrl = `https://api.github.com/repos/${repo}/contents/${filePath}?ref=${branch}`;
+
+  // Step 1: Get existing file sha
+  let sha = null;
+  const getRes = await fetch(apiUrl, {
+    headers: {
+      "Accept": "application/vnd.github.v3+json",
+      "Authorization": `token ${token}`
+    }
+  });
+
+  if (getRes.ok) {
+    const fileInfo = await getRes.json();
+    sha = fileInfo.sha;
+  } else if (getRes.status !== 404) {
+    const errBody = await getRes.json().catch(() => ({}));
+    throw new Error(errBody.message || `GitHub API 获取文件失败 (HTTP ${getRes.status})`);
+  }
+
+  // Step 2: Generate updated CSV content & base64 encode
+  const csvContent = serializeRecordsToCsv(records);
+  const utf8Bytes = new TextEncoder().encode(csvContent);
+  let binaryStr = "";
+  for (let i = 0; i < utf8Bytes.length; i++) {
+    binaryStr += String.fromCharCode(utf8Bytes[i]);
+  }
+  const base64Content = btoa(binaryStr);
+
+  // Step 3: PUT request to create/update file
+  const putPayload = {
+    message: commitMessage || `chore: update running records [skip ci]`,
+    content: base64Content,
+    branch: branch
+  };
+  if (sha) {
+    putPayload.sha = sha;
+  }
+
+  const putRes = await fetch(`https://api.github.com/repos/${repo}/contents/${filePath}`, {
+    method: "PUT",
+    headers: {
+      "Accept": "application/vnd.github.v3+json",
+      "Authorization": `token ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(putPayload)
+  });
+
+  if (!putRes.ok) {
+    const errBody = await putRes.json().catch(() => ({}));
+    throw new Error(errBody.message || `GitHub 提交失败 (HTTP ${putRes.status})`);
+  }
+
+  return await putRes.json();
+}
+
 // Toast notification helper
 function showToast(message, type = "success") {
   const toast = document.getElementById("toast");
@@ -1725,10 +2027,10 @@ function showToast(message, type = "success") {
 
   msg.textContent = message;
   toast.className = type === "error"
-    ? "fixed bottom-6 right-6 z-50 bg-rose-600 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-medium transform translate-y-0 opacity-100 transition-all duration-300"
-    : "fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-medium transform translate-y-0 opacity-100 transition-all duration-300";
+    ? "fixed bottom-6 right-6 z-50 bg-[#da1e28] text-white px-4 py-2.5 shadow-2xl flex items-center gap-2 text-xs font-medium transform translate-y-0 opacity-100 transition-all duration-300 border border-[#393939]"
+    : "fixed bottom-6 right-6 z-50 bg-[#24a148] text-white px-4 py-2.5 shadow-2xl flex items-center gap-2 text-xs font-medium transform translate-y-0 opacity-100 transition-all duration-300 border border-[#393939]";
 
   setTimeout(() => {
     toast.classList.add("translate-y-20", "opacity-0");
-  }, 3500);
+  }, 4000);
 }

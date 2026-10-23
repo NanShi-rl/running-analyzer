@@ -50,6 +50,11 @@
       <button id="btn-export-csv" onclick="exportCsvFile()" class="carbon-btn carbon-btn-secondary">
         <i class="fa-solid fa-download"></i> 导出 CSV
       </button>
+      <button id="btn-gh-settings" onclick="openGitHubSettingsModal()" class="carbon-btn carbon-btn-secondary flex items-center gap-2" title="配置 GitHub 写入 Token (用于在 GitHub Pages 直接修改数据)">
+        <i class="fa-brands fa-github text-[#f4f4f4]"></i>
+        <span class="hidden md:inline">GitHub 写入同步</span>
+        <span id="gh-sync-status-indicator" class="w-2 h-2 rounded-full bg-[#8d8d8d]"></span>
+      </button>
     </div>
   </header>
 
@@ -834,6 +839,74 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: GitHub Sync & PAT Settings Modal -->
+  <!-- ========================================== -->
+  <div id="modal-gh-settings" class="carbon-modal-backdrop hidden">
+    <div class="carbon-modal-container max-w-lg flex flex-col animate-fade-in">
+      
+      <!-- Modal Header -->
+      <div class="carbon-modal-header">
+        <div class="flex items-center gap-2.5">
+          <div class="w-6 h-6 bg-[#262626] text-white flex items-center justify-center text-xs border border-[#525252]">
+            <i class="fa-brands fa-github"></i>
+          </div>
+          <div>
+            <h3 class="font-semibold text-sm text-[#f4f4f4]">GitHub 仓库在线写入配置</h3>
+            <p class="text-xs text-[#8d8d8d]">在 GitHub Pages 静态页面直接新增、编辑与同步跑步数据</p>
+          </div>
+        </div>
+        <button onclick="closeGitHubSettingsModal()" class="text-[#8d8d8d] hover:text-[#f4f4f4] p-1 text-base transition-colors">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <form id="gh-settings-form" class="p-6 space-y-4 text-xs" onsubmit="handleSaveGitHubSettings(event)">
+        
+        <div class="bg-[#161616] p-3 border border-[#393939] space-y-1.5 text-xs text-[#8d8d8d]">
+          <div class="flex items-center gap-1.5 text-[#f4f4f4] font-medium">
+            <span id="gh-sync-status-text">未配置 GitHub 写入 Token</span>
+          </div>
+          <p>由于 GitHub Pages 为纯静态托管，配置 <strong>Personal Access Token (PAT)</strong> 后，页面可通过 GitHub REST API 直接将记录与分段提交至 <code class="bg-[#262626] px-1 py-0.5 text-[#a6c8ff]">data/running_records.csv</code>，并自动触发 GitHub Actions 重新构建。</p>
+          <p class="text-[11px] text-[#6f6f6f]">安全提示：Token 仅加密缓存在当前浏览器 <code class="text-[#a6c8ff]">localStorage</code> 中，绝不公开上传。</p>
+        </div>
+
+        <div>
+          <label class="block text-[#f4f4f4] font-medium mb-1">GitHub 仓库 (owner/repo)</label>
+          <input type="text" id="gh-input-repo" placeholder="例如: your-username/running-analyzer" class="carbon-input w-full">
+        </div>
+
+        <div>
+          <label class="block text-[#f4f4f4] font-medium mb-1">目标分支 (branch)</label>
+          <input type="text" id="gh-input-branch" placeholder="main" value="main" class="carbon-input w-full">
+        </div>
+
+        <div>
+          <label class="block text-[#f4f4f4] font-medium mb-1">GitHub Personal Access Token (PAT)</label>
+          <input type="password" id="gh-input-token" placeholder="ghp_xxx 或 github_pat_xxx" class="carbon-input w-full">
+          <p class="text-[11px] text-[#8d8d8d] mt-1">
+            所需权限：Classic Token 勾选 <code>repo</code> 或 Fine-grained Token 赋予该仓库 <code>Contents: Read and write</code> 权限。
+          </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="pt-4 border-t border-[#393939] flex items-center justify-between">
+          <button type="button" onclick="setGitHubConfig('', '', 'main'); closeGitHubSettingsModal(); showToast('已清除已保存的 Token');" class="carbon-btn carbon-btn-danger">
+            清除配置
+          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="closeGitHubSettingsModal()" class="carbon-btn carbon-btn-secondary">取消</button>
+            <button type="submit" class="carbon-btn carbon-btn-primary">
+              <i class="fa-solid fa-check"></i> 保存并启用
+            </button>
+          </div>
+        </div>
+
+      </form>
     </div>
   </div>
 
