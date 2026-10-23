@@ -108,7 +108,8 @@ async function fetchData() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (apiErr) {
       // 2. If API is not available (e.g. GitHub Pages / static hosting), fall back to static data/records.json
-      res = await fetch("data/records.json");
+      // Append cache buster timestamp to prevent browser from serving stale cached JSON
+      res = await fetch(`data/records.json?t=${Date.now()}`);
       if (!res.ok) throw new Error(`Static data load failed: HTTP ${res.status}`);
     }
 
