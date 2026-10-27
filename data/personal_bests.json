@@ -1,21 +1,21 @@
 {
   "户外跑步": {
     "longest_distance": {
-      "workout_id": "workout_081",
+      "workout_id": "workout_075",
       "date": "2026-10-07",
       "dist": 15.04,
       "duration": "01:44:51",
       "pace": "06'58\""
     },
     "longest_time": {
-      "workout_id": "workout_081",
+      "workout_id": "workout_075",
       "date": "2026-10-07",
       "duration": "01:44:51",
       "duration_sec": 6291,
       "dist": 15.04
     },
     "best_5k": {
-      "workout_id": "workout_063",
+      "workout_id": "workout_041",
       "date": "2026-07-26",
       "duration_sec": 1535,
       "duration_formatted": "25:35",
@@ -27,7 +27,7 @@
       }
     },
     "best_10k": {
-      "workout_id": "workout_063",
+      "workout_id": "workout_041",
       "date": "2026-07-26",
       "duration_sec": 3464,
       "duration_formatted": "57:44",
@@ -41,21 +41,21 @@
   },
   "室内跑步": {
     "longest_distance": {
-      "workout_id": "workout_010",
+      "workout_id": "workout_026",
       "date": "2026-07-07",
       "dist": 12.0,
       "duration": "01:19:13",
       "pace": "06'36\""
     },
     "longest_time": {
-      "workout_id": "workout_010",
+      "workout_id": "workout_026",
       "date": "2026-07-07",
       "duration": "01:19:13",
       "duration_sec": 4753,
       "dist": 12.0
     },
     "best_5k": {
-      "workout_id": "workout_014",
+      "workout_id": "workout_029",
       "date": "2026-07-09",
       "duration_sec": 1796,
       "duration_formatted": "29:56",
@@ -66,7 +66,7 @@
       }
     },
     "best_10k": {
-      "workout_id": "workout_030",
+      "workout_id": "workout_057",
       "date": "2026-08-31",
       "duration_sec": 3601,
       "duration_formatted": "60:01",
