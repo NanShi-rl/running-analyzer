@@ -7,7 +7,7 @@ let allWorkouts = [];
 let currentWorkoutForSplits = null;
 let currentSplitsList = [];
 let splitChartInstance = null;
-let currentActiveTab = "analytics"; // "analytics" or "workouts"
+let currentActiveTab = "home"; // "home", "analytics" or "workouts"
 
 // Analytics Chart instances
 let monthlyDistanceChart = null;
@@ -45,6 +45,7 @@ const GITHUB_BRANCH_KEY = "running_analyzer_gh_branch"; // default "main"
 
 // Initialize on DOM ready
 document.addEventListener("DOMContentLoaded", () => {
+  document.body.classList.toggle("on-home", currentActiveTab === "home");
   fetchData();
   setupEventListeners();
   updateGitHubSyncStatusUI();
@@ -61,28 +62,193 @@ function setupEventListeners() {
   document.getElementById("field-duration").addEventListener("input", autoCalcWorkoutPace);
 }
 
-// Switch between Analytics Dashboard and Workouts Table
+// Switch between Front Page, Analytics Dashboard and Workouts Table
 function switchTab(tabName) {
   currentActiveTab = tabName;
-  const btnAnalytics = document.getElementById("tab-btn-analytics");
-  const btnWorkouts = document.getElementById("tab-btn-workouts");
-  const viewAnalytics = document.getElementById("view-analytics");
-  const viewWorkouts = document.getElementById("view-workouts");
+  document.body.classList.toggle("on-home", tabName === "home");
+  ["home", "analytics", "workouts"].forEach(name => {
+    document.getElementById(`tab-btn-${name}`).classList.toggle("active", name === tabName);
+    document.getElementById(`view-${name}`).classList.toggle("hidden", name !== tabName);
+  });
 
-  if (tabName === "analytics") {
-    btnAnalytics.className = "tab-btn active px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all text-white bg-indigo-600 shadow-sm";
-    btnWorkouts.className = "tab-btn px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all text-slate-400 hover:text-slate-200";
-    viewAnalytics.classList.remove("hidden");
-    viewWorkouts.classList.add("hidden");
+  if (tabName === "home") {
+    renderHomePage();
+  } else if (tabName === "analytics") {
     renderAllAnalyticsCharts();
   } else {
-    btnWorkouts.className = "tab-btn active px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all text-white bg-indigo-600 shadow-sm";
-    btnAnalytics.className = "tab-btn px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all text-slate-400 hover:text-slate-200";
-    viewWorkouts.classList.remove("hidden");
-    viewAnalytics.classList.add("hidden");
     filterAndRenderTable();
   }
 }
+
+// Training type -> colored tag (one color per type)
+const TRAINING_TYPE_CLASS = {
+  "轻松跑": "tt-easy",
+  "间歇跑": "tt-interval",
+  "节奏跑": "tt-tempo",
+  "渐加速跑": "tt-progress",
+  "冲击PB跑": "tt-pb"
+};
+
+function trainingTypeTagsHtml(trainingType) {
+  return (trainingType || "").split(",").map(t => t.trim()).filter(Boolean).map(t =>
+    `<span class="tt-tag ${TRAINING_TYPE_CLASS[t] || "tt-other"}">${t}</span>`
+  ).join(" ");
+}
+
+// ==============================================================
+// FRONT PAGE (首页) · editorial style with scroll effects
+// ==============================================================
+
+// Same zone model & colors as the dashboard's "心率区间总用时占比分布" chart (Z4/Z5 merged)
+const ZONE_DEFS = [
+  { z: "Z1", n: "缓和热身", c: "#94a3b8", keys: ["hr_zone_warmup_pct"] },
+  { z: "Z2", n: "有氧耐力", c: "#10b981", keys: ["hr_zone_aerobic_endurance_pct"] },
+  { z: "Z3", n: "有氧动力", c: "#38bdf8", keys: ["hr_zone_aerobic_power_pct"] },
+  { z: "Z4/Z5", n: "乳酸阈值/无氧", c: "#f59e0b", keys: ["hr_zone_threshold_pct", "hr_zone_anaerobic_pct"] }
+];
+
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let homeObserver = null;
+
+function renderHomePage() {
+  if (!allWorkouts.length) return;
+
+  const sorted = [...allWorkouts].sort((a, b) =>
+    `${a.date || ""} ${a.start_time || ""}`.localeCompare(`${b.date || ""} ${b.start_time || ""}`));
+  const latest = sorted[sorted.length - 1];
+  const setText = (id, text) => { document.getElementById(id).textContent = text; };
+  // numeric spans are animated by the count-up observer
+  const setNum = (id, value) => {
+    const el = document.getElementById(id);
+    el.dataset.value = value;
+    el.textContent = (value === "--" || value === "") ? "--" : el.textContent;
+  };
+
+  setText("home-today", new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" }));
+
+  // ---- Latest run
+  setText("home-latest-date", `${latest.date || "--"} ${latest.start_time || ""}`.trim());
+  setNum("home-latest-distance", parseFloat(latest.distance_km) || "--");
+  setText("home-latest-pace-hl", latest.avg_pace || "--");
+  setText("home-latest-meta", latest.activity_type || "");
+  setText("home-latest-when", latest.date || "--");
+  setText("home-latest-route", latest.route_name || latest.activity_type || "--");
+  setText("home-latest-types", (latest.training_type || "").split(",").filter(Boolean).join(" + ") || "跑步");
+  setText("home-latest-note", latest.records_achieved ? `🏆 ${latest.records_achieved}` : (latest.notes || `${latest.weather || ""} ${latest.temperature_c ? latest.temperature_c + "°C" : ""}`.trim() || "继续加油。"));
+  setText("home-latest-pace", latest.avg_pace || "--");
+  setText("home-latest-duration", latest.active_duration || "--");
+  setNum("home-latest-hr", parseInt(latest.avg_heart_rate) || "--");
+  setNum("home-latest-cadence", parseInt(latest.avg_cadence_spm) || "--");
+  setNum("home-latest-maxhr", parseInt(latest.max_heart_rate) || "--");
+
+  const zones = ZONE_DEFS
+    .map(z => ({ ...z, v: Math.round(z.keys.reduce((sum, k) => sum + (parseFloat(latest[k]) || 0), 0) * 10) / 10 }))
+    .filter(z => z.v > 0);
+  document.getElementById("home-latest-zonebar").innerHTML = zones
+    .map(z => `<div class="seg" title="${z.z} ${z.n} ${z.v}%" data-w="${z.v}" style="background:${z.c}">${z.v >= 6 ? `<span>${z.z}</span>` : ""}</div>`).join("");
+  document.getElementById("home-latest-zonelegend").innerHTML = zones
+    .map(z => `<span><i style="background:${z.c}"></i><b>${z.z}</b> ${z.n} ${z.v}%</span>`).join("");
+
+  // ---- Totals
+  let totalDist = 0, outdoor = 0, indoor = 0, cadSum = 0, cadN = 0, hrSum = 0, hrN = 0, monthDist = 0;
+  const monthPrefix = (latest.date || "").slice(0, 7);
+  allWorkouts.forEach(w => {
+    const d = parseFloat(w.distance_km);
+    if (!isNaN(d)) {
+      totalDist += d;
+      if ((w.date || "").startsWith(monthPrefix)) monthDist += d;
+    }
+    if (w.activity_type === "户外跑步") outdoor++;
+    else if (w.activity_type === "室内跑步") indoor++;
+    const cad = parseInt(w.avg_cadence_spm);
+    if (cad > 0) { cadSum += cad; cadN++; }
+    const hr = parseInt(w.avg_heart_rate);
+    if (hr > 0) { hrSum += hr; hrN++; }
+  });
+  let latestVo2 = "--";
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const v = parseFloat(sorted[i].vo2_max);
+    if (v > 0) { latestVo2 = v; break; }
+  }
+
+  setNum("home-stat-distance", totalDist);
+  setNum("home-stat-count", allWorkouts.length);
+  setText("home-stat-split-type", `户外 ${outdoor} 次 · 室内 ${indoor} 次`);
+  setText("home-stat-month-label", `${monthPrefix} 月跑量`);
+  setNum("home-stat-month", monthDist);
+  setNum("home-stat-vo2max", latestVo2);
+  setNum("home-stat-cadence", cadN ? Math.round(cadSum / cadN) : "--");
+  setNum("home-stat-hr", hrN ? Math.round(hrSum / hrN) : "--");
+
+  initHomeScrollEffects();
+}
+
+function animateCount(el) {
+  const target = parseFloat(el.dataset.value);
+  if (isNaN(target)) { el.textContent = "--"; return; }
+  const decimals = parseInt(el.dataset.decimals || "0", 10);
+  if (prefersReducedMotion) { el.textContent = target.toFixed(decimals); return; }
+  const start = performance.now(), duration = 1400;
+  const tick = now => {
+    const t = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = (target * eased).toFixed(decimals);
+    if (t < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+// Reveal-on-scroll (both directions), count-up, zone bar growth
+function initHomeScrollEffects() {
+  const root = document.getElementById("view-home");
+  if (homeObserver) homeObserver.disconnect();
+  const counters = [...root.querySelectorAll("[data-value]")];
+  const segs = [...root.querySelectorAll(".home-zonebar .seg")];
+  segs.forEach(s => { s.style.width = "0%"; });
+
+  homeObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      const el = entry.target;
+      if (entry.isIntersecting) {
+        el.classList.add("in");
+        el.querySelectorAll("[data-value]").forEach(animateCount);
+        if (el.dataset.value !== undefined) animateCount(el);
+        if (el.classList.contains("home-zonebar")) el.querySelectorAll(".seg").forEach(s => { s.style.width = s.dataset.w + "%"; });
+      } else if (el.classList.contains("reveal")) {
+        // scrolling back up replays the entrance
+        el.classList.remove("in");
+      }
+    });
+  }, { threshold: 0.25 });
+
+  root.querySelectorAll(".reveal, .home-zonebar").forEach(el => homeObserver.observe(el));
+  root.querySelectorAll(".wavy-green, .circled").forEach(el => homeObserver.observe(el));
+  counters.forEach(c => { if (!c.closest(".reveal")) homeObserver.observe(c); });
+
+  // re-trigger the hero word-by-word entrance
+  const hero = root.querySelector(".home-display.split");
+  hero.classList.remove("go");
+  void hero.offsetWidth;
+  hero.classList.add("go");
+  root.querySelectorAll(".home-hero2 .rise").forEach(e => { e.classList.remove("go"); void e.offsetWidth; e.classList.add("go"); });
+}
+
+// Scroll progress line + parallax (<main> is the scroll container)
+let homeScrollTicking = false;
+document.querySelector("main").addEventListener("scroll", e => {
+  if (currentActiveTab !== "home" || homeScrollTicking) return;
+  homeScrollTicking = true;
+  const main = e.currentTarget;
+  requestAnimationFrame(() => {
+    homeScrollTicking = false;
+    const max = main.scrollHeight - main.clientHeight;
+    document.getElementById("home-progress").style.transform = `scaleX(${max > 0 ? main.scrollTop / max : 0})`;
+    if (prefersReducedMotion) return;
+    document.querySelectorAll("#view-home .parallax").forEach(el => {
+      el.style.transform = `translateY(${main.scrollTop * parseFloat(el.dataset.speed)}px)`;
+    });
+  });
+}, { passive: true });
 
 function autoCalcWorkoutPace() {
   const distVal = parseFloat(document.getElementById("field-distance").value);
@@ -118,7 +284,9 @@ async function fetchData() {
       allWorkouts = json.data;
       updateHeaderKPIs();
       computeAllPersonalBests();
-      if (currentActiveTab === "analytics") {
+      if (currentActiveTab === "home") {
+        renderHomePage();
+      } else if (currentActiveTab === "analytics") {
         renderAllAnalyticsCharts();
       } else {
         filterAndRenderTable();
@@ -163,66 +331,11 @@ function secondsToPaceString(sec) {
   return `${String(m).padStart(2, '0')}'${String(s).padStart(2, '0')}"`;
 }
 
-// Compute and render top header KPIs
+// Compute and render header totals (all other KPIs live on the front page)
 function updateHeaderKPIs() {
-  let totalDist = 0;
-  let outdoorCount = 0;
-  let indoorCount = 0;
-  let totalCadence = 0;
-  let cadenceCount = 0;
-  let totalHr = 0;
-  let hrCount = 0;
-  let missingSplitsCount = 0;
-
-  // Find latest VO2 Max
-  const sortedByDate = [...allWorkouts].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-  let latestVo2 = "--";
-  for (let i = sortedByDate.length - 1; i >= 0; i--) {
-    const v = parseFloat(sortedByDate[i].vo2_max);
-    if (!isNaN(v) && v > 0) {
-      latestVo2 = v.toFixed(1);
-      break;
-    }
-  }
-
-  allWorkouts.forEach(w => {
-    const d = parseFloat(w.distance_km);
-    if (!isNaN(d)) totalDist += d;
-    if (w.activity_type === "户外跑步") outdoorCount++;
-    else if (w.activity_type === "室内跑步") indoorCount++;
-
-    const cad = parseInt(w.avg_cadence_spm);
-    if (!isNaN(cad) && cad > 0) {
-      totalCadence += cad;
-      cadenceCount++;
-    }
-
-    const hr = parseInt(w.avg_heart_rate);
-    if (!isNaN(hr) && hr > 0) {
-      totalHr += hr;
-      hrCount++;
-    }
-
-    if (!w.splits || w.splits.length === 0) {
-      missingSplitsCount++;
-    }
-  });
-
-  const avgCad = cadenceCount ? Math.round(totalCadence / cadenceCount) : "--";
-  const avgHr = hrCount ? Math.round(totalHr / hrCount) : "--";
-
+  const totalDist = allWorkouts.reduce((sum, w) => sum + (parseFloat(w.distance_km) || 0), 0);
   document.getElementById("nav-total-dist").textContent = `${totalDist.toFixed(1)} km`;
   document.getElementById("nav-total-count").textContent = `${allWorkouts.length} 次`;
-
-  document.getElementById("stat-distance").textContent = `${totalDist.toFixed(2)} km`;
-  document.getElementById("stat-split-type").textContent = `户外: ${outdoorCount} · 室内: ${indoorCount}`;
-
-  document.getElementById("stat-count").textContent = `${allWorkouts.length} 次`;
-  document.getElementById("stat-missing-splits").textContent = `待补全分段: ${missingSplitsCount} 次`;
-
-  document.getElementById("stat-latest-vo2max").textContent = latestVo2;
-  document.getElementById("stat-avg-cadence").textContent = `${avgCad} spm`;
-  document.getElementById("stat-avg-hr").textContent = `平均心率: ${avgHr} bpm`;
 }
 
 // ==============================================================
@@ -1224,9 +1337,7 @@ function renderTableRows(workouts) {
       ? `<span class="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-semibold"><i class="fa-solid fa-trophy mr-1"></i>${w.records_achieved}</span>`
       : '';
 
-    const trainingTags = (w.training_type || "").split(",").filter(Boolean).map(t => 
-      `<span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px]">${t.trim()}</span>`
-    ).join(" ");
+    const trainingTags = trainingTypeTagsHtml(w.training_type);
 
     return `
       <tr class="hover:bg-slate-800/60 transition-colors">
