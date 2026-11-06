@@ -42,6 +42,8 @@ const CSV_COLUMNS = [
 const GITHUB_TOKEN_KEY = "running_analyzer_gh_token";
 const GITHUB_REPO_KEY = "running_analyzer_gh_repo"; // e.g. "username/running-analyzer"
 const GITHUB_BRANCH_KEY = "running_analyzer_gh_branch"; // default "main"
+const PENDING_KEY = "running_analyzer_pending_changes"; // queued edits awaiting a single GitHub commit
+let usingStaticData = false; // true when records came from data/records.json (no local backend)
 
 // Initialize on DOM ready
 document.addEventListener("DOMContentLoaded", () => {
@@ -49,6 +51,14 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchData();
   setupEventListeners();
   updateGitHubSyncStatusUI();
+  updatePendingUI();
+});
+
+window.addEventListener("beforeunload", e => {
+  if (getPendingCount() > 0) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
 });
 
 function setupEventListeners() {
@@ -60,6 +70,15 @@ function setupEventListeners() {
   // Auto-calculate pace in Workout Modal when distance or duration changes
   document.getElementById("field-distance").addEventListener("input", autoCalcWorkoutPace);
   document.getElementById("field-duration").addEventListener("input", autoCalcWorkoutPace);
+
+  // By-KM split editor: Enter moves between boxes; Enter in the "add km" box adds rows
+  document.getElementById("split-table-body").addEventListener("keydown", handleSplitTableKeydown);
+  document.getElementById("split-add-count").addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addNewSplitRows();
+    }
+  });
 }
 
 // Switch between Front Page, Analytics Dashboard and Workouts Table
@@ -268,11 +287,13 @@ function autoCalcWorkoutPace() {
 async function fetchData() {
   try {
     let res = null;
+    usingStaticData = false;
     // 1. Try local backend server API first
     try {
       res = await fetch("/api/records");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (apiErr) {
+      usingStaticData = true;
       // 2. If API is not available (e.g. GitHub Pages / static hosting), fall back to static data/records.json
       // Append cache buster timestamp to prevent browser from serving stale cached JSON
       res = await fetch(`data/records.json?t=${Date.now()}`);
@@ -281,7 +302,8 @@ async function fetchData() {
 
     const json = await res.json();
     if (json.success) {
-      allWorkouts = json.data;
+      allWorkouts = usingStaticData ? applyPendingChanges(json.data) : json.data;
+      updatePendingUI();
       updateHeaderKPIs();
       computeAllPersonalBests();
       if (currentActiveTab === "home") {
@@ -1555,35 +1577,9 @@ async function handleSaveWorkout(event) {
       // Local server not running or network failed, fallback to GitHub API
     }
 
-    // 2. Fallback to GitHub REST API commit (for GitHub Pages hosting)
-    showToast("正在通过 GitHub API 同步提交至仓库...", "success");
-
-    // Prepare new list in memory
-    const existingIdx = allWorkouts.findIndex(w => w.workout_id === payload.workout_id);
-    let updatedWorkouts = [...allWorkouts];
-    if (existingIdx >= 0) {
-      updatedWorkouts[existingIdx] = { ...updatedWorkouts[existingIdx], ...payload };
-    } else {
-      // New record, insert at beginning
-      updatedWorkouts.unshift(payload);
-    }
-
-    const commitMsg = payload.workout_id && existingIdx >= 0
-      ? `feat: update workout ${payload.workout_id}`
-      : `feat: log workout ${payload.workout_id} on ${payload.date}`;
-
-    await commitRecordsToGitHub(updatedWorkouts, commitMsg);
-
-    allWorkouts = updatedWorkouts;
-    updateHeaderKPIs();
-    computeAllPersonalBests();
-    if (currentActiveTab === "analytics") {
-      renderAllAnalyticsCharts();
-    } else {
-      filterAndRenderTable();
-    }
-
-    showToast("已成功提交至 GitHub 仓库！GitHub Actions 将在稍后自动重新部署静态页面。");
+    // 2. Static hosting: queue the change locally; one "Sync to GitHub" click commits everything
+    queueUpsert({ ...(allWorkouts.find(w => w.workout_id === payload.workout_id) || {}), ...payload });
+    showToast("已暂存本地，点击顶部「同步到 GitHub」统一提交。");
     closeWorkoutModal();
   } catch (err) {
     console.error("Save workout error:", err);
@@ -1618,63 +1614,64 @@ function closeSplitsModal() {
 
 function renderSplitsTable() {
   const tbody = document.getElementById("split-table-body");
-  let totalDurSec = 0;
-  let totalDistKm = 0;
 
   if (currentSplitsList.length === 0) {
     tbody.innerHTML = `
       <tr>
         <td colspan="9" class="py-8 text-center text-slate-500 text-xs">
-          暂无公里分段明细数据，点击右上角「添加下一公里」开始录入。
+          暂无公里分段明细数据，在右上角输入公里数并点击「添加公里」开始录入。
         </td>
       </tr>
     `;
   } else {
     tbody.innerHTML = currentSplitsList.map((s, idx) => {
-      const dSec = timeStringToSeconds(s.duration);
-      totalDurSec += dSec;
-      totalDistKm += parseFloat(s.distance_km || 1);
-
       return `
         <tr class="hover:bg-slate-800/50">
           <td class="py-2 px-3 font-mono font-semibold text-slate-400">#${s.km || idx + 1}</td>
           <td class="py-2 px-3">
             <input type="number" step="0.01" value="${s.distance_km !== null && s.distance_km !== undefined ? s.distance_km : 1.0}"
+              data-idx="${idx}" data-field="distance_km"
               onchange="handleSplitInputChange(${idx}, 'distance_km', this.value)"
               class="w-20 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white font-mono text-xs focus:border-emerald-500">
           </td>
           <td class="py-2 px-3">
             <input type="text" placeholder="00:06:30" value="${s.duration || ''}"
+              data-idx="${idx}" data-field="duration"
               onchange="handleSplitInputChange(${idx}, 'duration', this.value)"
               class="w-24 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-white font-mono text-xs focus:border-emerald-500">
           </td>
           <td class="py-2 px-3">
             <input type="text" placeholder="06'30&quot;" value="${s.avg_pace || ''}"
+              data-idx="${idx}" data-field="avg_pace"
               onchange="handleSplitInputChange(${idx}, 'avg_pace', this.value)"
               class="w-24 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-amber-300 font-mono text-xs focus:border-emerald-500">
           </td>
           <td class="py-2 px-3">
             <input type="number" placeholder="145" value="${s.avg_heart_rate || ''}"
+              data-idx="${idx}" data-field="avg_heart_rate"
               onchange="handleSplitInputChange(${idx}, 'avg_heart_rate', this.value)"
               class="w-20 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-rose-300 font-mono text-xs focus:border-emerald-500">
           </td>
           <td class="py-2 px-3">
             <input type="number" placeholder="176" value="${s.avg_cadence_spm || ''}"
+              data-idx="${idx}" data-field="avg_cadence_spm"
               onchange="handleSplitInputChange(${idx}, 'avg_cadence_spm', this.value)"
               class="w-20 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sky-300 font-mono text-xs focus:border-emerald-500">
           </td>
           <td class="py-2 px-3">
             <input type="number" step="0.01" placeholder="0.82" value="${s.avg_stride_length_m || ''}"
+              data-idx="${idx}" data-field="avg_stride_length_m"
               onchange="handleSplitInputChange(${idx}, 'avg_stride_length_m', this.value)"
               class="w-20 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-emerald-300 font-mono text-xs focus:border-emerald-500">
           </td>
           <td class="py-2 px-3">
             <input type="number" placeholder="185" value="${s.avg_power_watts || ''}"
+              data-idx="${idx}" data-field="avg_power_watts"
               onchange="handleSplitInputChange(${idx}, 'avg_power_watts', this.value)"
               class="w-20 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-300 font-mono text-xs focus:border-emerald-500">
           </td>
           <td class="py-2 px-2 text-center">
-            <button onclick="removeSplitRow(${idx})" class="text-slate-500 hover:text-rose-400 p-1 transition-colors" title="删除该分段">
+            <button type="button" tabindex="-1" onclick="removeSplitRow(${idx})" class="text-slate-500 hover:text-rose-400 p-1 transition-colors" title="删除该分段">
               <i class="fa-solid fa-trash-can"></i>
             </button>
           </td>
@@ -1683,9 +1680,50 @@ function renderSplitsTable() {
     }).join("");
   }
 
-  // Update summary badge
+  updateSplitsSummary();
+}
+
+function updateSplitsSummary() {
+  let totalDurSec = 0;
+  let totalDistKm = 0;
+  currentSplitsList.forEach(s => {
+    totalDurSec += timeStringToSeconds(s.duration);
+    totalDistKm += parseFloat(s.distance_km || 1);
+  });
   const summaryBadge = document.getElementById("split-summary-badge");
   summaryBadge.textContent = `累计 ${totalDistKm.toFixed(2)} km · 预计分段总用时 ${secondsToTimeString(totalDurSec, true)}`;
+}
+
+// Update auto-calculated cells in place so the focused input is never re-rendered (keeps Tab / Enter navigation working)
+function setSplitCell(index, field, value) {
+  const el = document.querySelector(`#split-table-body input[data-idx="${index}"][data-field="${field}"]`);
+  if (el) el.value = value === null || value === undefined ? "" : value;
+}
+
+// Enter / Tab (Shift = backwards) moves vertically: down the same column, then to the top of the next column
+function handleSplitTableKeydown(e) {
+  if ((e.key !== "Enter" && e.key !== "Tab") || !e.target.matches("input[data-field]")) return;
+
+  const inputs = Array.from(document.querySelectorAll("#split-table-body input[data-field]"));
+  const fields = [...new Set(inputs.map(i => i.dataset.field))];
+  const rowCount = inputs.length / fields.length;
+  const row = parseInt(e.target.dataset.idx, 10);
+  const col = fields.indexOf(e.target.dataset.field);
+  const step = e.shiftKey ? -1 : 1;
+
+  // Linear position in column-major order
+  const pos = col * rowCount + row + step;
+  const next = pos >= 0 && pos < inputs.length
+    ? document.querySelector(`#split-table-body input[data-idx="${pos % rowCount}"][data-field="${fields[Math.floor(pos / rowCount)]}"]`)
+    : null;
+
+  if (next) {
+    e.preventDefault();
+    next.focus();
+    next.select();
+  } else if (e.key === "Enter") {
+    e.preventDefault(); // stay in place at the first/last box
+  }
 }
 
 function handleSplitInputChange(index, field, value) {
@@ -1723,24 +1761,33 @@ function handleSplitInputChange(index, field, value) {
     }
   }
 
-  renderSplitsTable();
+  setSplitCell(index, "avg_pace", row.avg_pace);
+  setSplitCell(index, "avg_stride_length_m", row.avg_stride_length_m);
+  updateSplitsSummary();
   updateSplitsChart();
 }
 
-function addNewSplitRow() {
-  const nextKm = currentSplitsList.length + 1;
-  currentSplitsList.push({
-    km: nextKm,
-    distance_km: 1.0,
-    duration: "",
-    avg_pace: "",
-    avg_heart_rate: null,
-    avg_cadence_spm: null,
-    avg_stride_length_m: null,
-    avg_power_watts: null
-  });
+// Add N new 1-km rows at once (N read from #split-add-count), then focus the first new row's duration box
+function addNewSplitRows() {
+  const countInput = document.getElementById("split-add-count");
+  const count = Math.min(Math.max(parseInt(countInput.value, 10) || 1, 1), 200);
+  const firstNewIdx = currentSplitsList.length;
+  for (let i = 0; i < count; i++) {
+    currentSplitsList.push({
+      km: currentSplitsList.length + 1,
+      distance_km: 1.0,
+      duration: "",
+      avg_pace: "",
+      avg_heart_rate: null,
+      avg_cadence_spm: null,
+      avg_stride_length_m: null,
+      avg_power_watts: null
+    });
+  }
   renderSplitsTable();
   updateSplitsChart();
+  const first = document.querySelector(`#split-table-body input[data-idx="${firstNewIdx}"][data-field="duration"]`);
+  if (first) first.focus();
 }
 
 function removeSplitRow(index) {
@@ -1851,33 +1898,17 @@ async function saveCurrentSplits() {
       // Local server not running or network failed, fallback to GitHub API
     }
 
-    // 2. Fallback to GitHub REST API commit
-    showToast("正在通过 GitHub API 同步分段明细至仓库...", "success");
-
-    const existingIdx = allWorkouts.findIndex(w => w.workout_id === workoutId);
-    if (existingIdx === -1) {
+    // 2. Static hosting: queue the change locally
+    const existing = allWorkouts.find(w => w.workout_id === workoutId);
+    if (!existing) {
       throw new Error(`未找到对应训练记录: ${workoutId}`);
     }
-
-    let updatedWorkouts = [...allWorkouts];
-    updatedWorkouts[existingIdx] = {
-      ...updatedWorkouts[existingIdx],
+    queueUpsert({
+      ...existing,
       splits: currentSplitsList,
       splits_by_km_json: JSON.stringify(currentSplitsList)
-    };
-
-    await commitRecordsToGitHub(updatedWorkouts, `feat: update splits for ${workoutId}`);
-
-    allWorkouts = updatedWorkouts;
-    updateHeaderKPIs();
-    computeAllPersonalBests();
-    if (currentActiveTab === "analytics") {
-      renderAllAnalyticsCharts();
-    } else {
-      filterAndRenderTable();
-    }
-
-    showToast("分段明细已成功同步至 GitHub 仓库！");
+    });
+    showToast("分段明细已暂存本地，点击顶部「同步到 GitHub」统一提交。");
     closeSplitsModal();
   } catch (err) {
     console.error("Save splits error:", err);
@@ -1917,22 +1948,9 @@ async function handleDeleteWorkout(workoutId) {
       // Local server not running or network failed, fallback to GitHub API
     }
 
-    // 2. Fallback to GitHub REST API commit
-    showToast("正在通过 GitHub API 同步删除操作至仓库...", "success");
-
-    let updatedWorkouts = allWorkouts.filter(w => w.workout_id !== workoutId);
-    await commitRecordsToGitHub(updatedWorkouts, `feat: delete workout ${workoutId}`);
-
-    allWorkouts = updatedWorkouts;
-    updateHeaderKPIs();
-    computeAllPersonalBests();
-    if (currentActiveTab === "analytics") {
-      renderAllAnalyticsCharts();
-    } else {
-      filterAndRenderTable();
-    }
-
-    showToast(`记录 [${workoutId}] 已从 GitHub 仓库成功删除！`);
+    // 2. Static hosting: queue the deletion locally
+    queueDelete(workoutId);
+    showToast(`记录 [${workoutId}] 已暂存删除，点击顶部「同步到 GitHub」统一提交。`);
     closeWorkoutModal();
   } catch (err) {
     console.error("Delete error:", err);
@@ -1949,6 +1967,107 @@ function exportCsvFile() {
 function refreshData() {
   fetchData();
   showToast("数据已刷新");
+}
+
+// ==============================================================
+// PENDING CHANGES QUEUE (one GitHub commit for many edits)
+// ==============================================================
+
+function getPending() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PENDING_KEY) || "{}");
+    return { upserts: p.upserts || {}, deletes: p.deletes || [] };
+  } catch (e) {
+    return { upserts: {}, deletes: [] };
+  }
+}
+
+function savePending(p) {
+  if (Object.keys(p.upserts).length === 0 && p.deletes.length === 0) {
+    localStorage.removeItem(PENDING_KEY);
+  } else {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(p));
+  }
+  updatePendingUI();
+}
+
+function getPendingCount() {
+  const p = getPending();
+  return Object.keys(p.upserts).length + p.deletes.length;
+}
+
+// Overlay queued edits on a record list (new records go first)
+function applyPendingChanges(list) {
+  const p = getPending();
+  const ids = new Set(list.map(w => w.workout_id));
+  const result = list
+    .filter(w => !p.deletes.includes(w.workout_id))
+    .map(w => p.upserts[w.workout_id] || w);
+  Object.values(p.upserts).forEach(r => {
+    if (!ids.has(r.workout_id)) result.unshift(r);
+  });
+  return result;
+}
+
+function queueUpsert(record) {
+  const p = getPending();
+  p.upserts[record.workout_id] = record;
+  p.deletes = p.deletes.filter(id => id !== record.workout_id);
+  savePending(p);
+  refreshAfterLocalChange();
+}
+
+function queueDelete(workoutId) {
+  const p = getPending();
+  delete p.upserts[workoutId];
+  if (!p.deletes.includes(workoutId)) p.deletes.push(workoutId);
+  savePending(p);
+  refreshAfterLocalChange();
+}
+
+function refreshAfterLocalChange() {
+  allWorkouts = applyPendingChanges(allWorkouts);
+  updateHeaderKPIs();
+  computeAllPersonalBests();
+  if (currentActiveTab === "home") {
+    renderHomePage();
+  } else if (currentActiveTab === "analytics") {
+    renderAllAnalyticsCharts();
+  } else {
+    filterAndRenderTable();
+  }
+}
+
+function updatePendingUI() {
+  const btn = document.getElementById("btn-sync-pending");
+  if (!btn) return;
+  const count = getPendingCount();
+  btn.classList.toggle("hidden", count === 0);
+  document.getElementById("sync-pending-count").textContent = count;
+}
+
+// Commit all queued changes to GitHub in a single commit
+async function syncPendingToGitHub() {
+  const p = getPending();
+  const count = getPendingCount();
+  if (count === 0) return;
+
+  const btn = document.getElementById("btn-sync-pending");
+  btn.disabled = true;
+  try {
+    const upsertIds = Object.keys(p.upserts);
+    const parts = [];
+    if (upsertIds.length) parts.push(`update ${upsertIds.join(", ")}`);
+    if (p.deletes.length) parts.push(`delete ${p.deletes.join(", ")}`);
+    await commitRecordsToGitHub(allWorkouts, `feat: sync ${count} workout change(s) (${parts.join("; ")})`);
+    savePending({ upserts: {}, deletes: [] });
+    showToast("已一次性提交至 GitHub！GitHub Actions 将在稍后自动重新部署静态页面。");
+  } catch (err) {
+    console.error("Sync error:", err);
+    showToast(err.message || "同步失败，修改仍保留在本地", "error");
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ==============================================================

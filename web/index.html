@@ -53,6 +53,10 @@
       <button id="btn-export-csv" onclick="exportCsvFile()" class="carbon-btn carbon-btn-secondary">
         <i class="fa-solid fa-download"></i> 导出 CSV
       </button>
+      <button id="btn-sync-pending" onclick="syncPendingToGitHub()" class="carbon-btn carbon-btn-primary hidden" title="将本地暂存的所有修改一次性提交到 GitHub">
+        <i class="fa-solid fa-cloud-arrow-up"></i> 同步到 GitHub
+        <span id="sync-pending-count" class="px-1.5 bg-[#0043ce] text-white text-[10px]">0</span>
+      </button>
       <button id="btn-gh-settings" onclick="openGitHubSettingsModal()" class="carbon-btn carbon-btn-secondary flex items-center gap-2" title="配置 GitHub 写入 Token (用于在 GitHub Pages 直接修改数据)">
         <i class="fa-brands fa-github text-[#f4f4f4]"></i>
         <span class="hidden md:inline">GitHub 写入同步</span>
@@ -598,6 +602,14 @@
           </h4>
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div>
+              <label class="block text-[#8d8d8d] mb-1">天气 (weather)</label>
+              <input type="text" id="field-weather" placeholder="晴 / 多云 / 阴" class="carbon-input w-full">
+            </div>
+            <div>
+              <label class="block text-[#8d8d8d] mb-1">温度 ℃ (temperature_c)</label>
+              <input type="number" step="0.5" id="field-temp" placeholder="28.0" class="carbon-input w-full">
+            </div>
+            <div>
               <label class="block text-[#8d8d8d] mb-1">日期 (date)</label>
               <input type="date" id="field-date" class="carbon-input w-full">
             </div>
@@ -640,10 +652,10 @@
           </div>
         </div>
 
-        <!-- Section 3: Biometrics & Heart Rate Zones -->
+        <!-- Section 3: Biometrics -->
         <div>
           <h4 class="text-xs font-semibold text-[#f4f4f4] uppercase tracking-wider mb-3 flex items-center gap-1.5 border-b border-[#393939] pb-1">
-            <i class="fa-solid fa-heart-pulse text-[#fa4d56]"></i> 生理心率与区间 (Biometrics & Zones)
+            <i class="fa-solid fa-heart-pulse text-[#fa4d56]"></i> 生理心率 (Biometrics)
           </h4>
           <div class="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-4">
             <div>
@@ -662,6 +674,15 @@
               <label class="block text-[#8d8d8d] mb-1">消耗热量 (calories_kcal)</label>
               <input type="number" id="field-calories" placeholder="700" class="carbon-input w-full">
             </div>
+          </div>
+        </div>
+
+        <!-- Section 3b: Heart Rate Zones -->
+        <div>
+          <h4 class="text-xs font-semibold text-[#f4f4f4] uppercase tracking-wider mb-3 flex items-center gap-1.5 border-b border-[#393939] pb-1">
+            <i class="fa-solid fa-gauge-high text-[#fa4d56]"></i> 心率区间 (Zones)
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-4">
             <div>
               <label class="block text-[#8d8d8d] mb-1">缓和热身 % (warmup)</label>
               <input type="number" step="0.1" id="field-hr-warmup" placeholder="5" class="carbon-input w-full">
@@ -686,7 +707,19 @@
           <h4 class="text-xs font-semibold text-[#f4f4f4] uppercase tracking-wider mb-3 flex items-center gap-1.5 border-b border-[#393939] pb-1">
             <i class="fa-solid fa-shoe-prints text-[#24a148]"></i> 跑姿动力学 (Running Dynamics)
           </h4>
-          <div class="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-[#8d8d8d] mb-1">训练负荷 (training_load)</label>
+              <input type="number" id="field-training-load" placeholder="120" class="carbon-input w-full">
+            </div>
+            <div>
+              <label class="block text-[#8d8d8d] mb-1">爬升高度 (elevation_gain_m)</label>
+              <input type="number" id="field-elevation" placeholder="25" class="carbon-input w-full">
+            </div>
+            <div>
+              <label class="block text-[#8d8d8d] mb-1">平均功率 (avg_power_watts)</label>
+              <input type="number" id="field-power" placeholder="185" class="carbon-input w-full">
+            </div>
             <div>
               <label class="block text-[#8d8d8d] mb-1">平均步频 (avg_cadence_spm)</label>
               <input type="number" id="field-cadence" placeholder="176" class="carbon-input w-full">
@@ -695,15 +728,7 @@
               <label class="block text-[#8d8d8d] mb-1">平均步幅 (avg_stride_length_m)</label>
               <input type="number" step="0.01" id="field-stride" placeholder="0.81" class="carbon-input w-full">
             </div>
-            <div>
-              <label class="block text-[#8d8d8d] mb-1">平均功率 (avg_power_watts)</label>
-              <input type="number" id="field-power" placeholder="185" class="carbon-input w-full">
-            </div>
-            <div>
-              <label class="block text-[#8d8d8d] mb-1">爬升高度 (elevation_gain_m)</label>
-              <input type="number" id="field-elevation" placeholder="25" class="carbon-input w-full">
-            </div>
-            <div>
+            <div style="grid-column-start:1">
               <label class="block text-[#8d8d8d] mb-1">平均触地时间 ms (avg_gct)</label>
               <input type="number" step="0.1" id="field-avg-gct" placeholder="240" class="carbon-input w-full">
             </div>
@@ -715,11 +740,7 @@
               <label class="block text-[#8d8d8d] mb-1">最小触地时间 ms (min_gct)</label>
               <input type="number" step="0.1" id="field-min-gct" placeholder="220" class="carbon-input w-full">
             </div>
-            <div>
-              <label class="block text-[#8d8d8d] mb-1">训练负荷 (training_load)</label>
-              <input type="number" id="field-training-load" placeholder="120" class="carbon-input w-full">
-            </div>
-            <div>
+            <div style="grid-column-start:1">
               <label class="block text-[#8d8d8d] mb-1">平均腾空时间 ms (avg_flight)</label>
               <input type="number" step="0.1" id="field-avg-flight" placeholder="110" class="carbon-input w-full">
             </div>
@@ -731,7 +752,7 @@
               <label class="block text-[#8d8d8d] mb-1">最小腾空时间 ms (min_flight)</label>
               <input type="number" step="0.1" id="field-min-flight" placeholder="95" class="carbon-input w-full">
             </div>
-            <div>
+            <div style="grid-column-start:1">
               <label class="block text-[#8d8d8d] mb-1">平均垂直振幅 cm (avg_vert)</label>
               <input type="number" step="0.1" id="field-avg-vert" placeholder="7.8" class="carbon-input w-full">
             </div>
@@ -749,22 +770,14 @@
         <!-- Section 5: Environment & Records -->
         <div>
           <h4 class="text-xs font-semibold text-[#f4f4f4] uppercase tracking-wider mb-3 flex items-center gap-1.5 border-b border-[#393939] pb-1">
-            <i class="fa-solid fa-cloud-sun text-[#f1c21b]"></i> 环境、成就与备注 (Environment, Records & Notes)
+            <i class="fa-solid fa-trophy text-[#f1c21b]"></i> 成就与备注 (Records & Notes)
           </h4>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-[#8d8d8d] mb-1">天气 (weather)</label>
-              <input type="text" id="field-weather" placeholder="晴 / 多云 / 阴" class="carbon-input w-full">
-            </div>
-            <div>
-              <label class="block text-[#8d8d8d] mb-1">温度 ℃ (temperature_c)</label>
-              <input type="number" step="0.5" id="field-temp" placeholder="28.0" class="carbon-input w-full">
-            </div>
+          <div class="grid grid-cols-1 gap-4">
             <div>
               <label class="block text-[#8d8d8d] mb-1">达成纪录 (records_achieved)</label>
               <input type="text" id="field-records-achieved" placeholder="10K PB, 最长时间新纪录" class="carbon-input w-full">
             </div>
-            <div class="sm:col-span-3">
+            <div>
               <label class="block text-[#8d8d8d] mb-1.5">训练类型 (training_type · 可多选)</label>
               <div class="flex flex-wrap items-center gap-2" id="training-type-checkboxes">
                 <label class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#262626] border border-[#393939] cursor-pointer hover:border-[#0f62fe] text-xs transition-colors">
@@ -789,7 +802,7 @@
                 </label>
               </div>
             </div>
-            <div class="sm:col-span-3">
+            <div>
               <label class="block text-[#8d8d8d] mb-1">训练备注 / 感受 (notes)</label>
               <input type="text" id="field-notes" placeholder="跑鞋型号、体感状态、间歇跑组数等备注..." class="carbon-input w-full">
             </div>
@@ -841,9 +854,13 @@
             <span class="carbon-tag carbon-tag-green text-[10px]">⚡ 智能自动计算</span>
             <span>输入「分段用时」和「距离」将自动计算配速；输入「步频」将自动计算步幅（米）。</span>
           </div>
-          <button type="button" onclick="addNewSplitRow()" class="carbon-btn carbon-btn-primary shrink-0">
-            <i class="fa-solid fa-plus"></i> 添加下一公里
-          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <input type="number" id="split-add-count" min="1" max="200" value="1" title="一次添加的公里数（回车即添加）"
+              class="carbon-input w-16 text-center">
+            <button type="button" onclick="addNewSplitRows()" class="carbon-btn carbon-btn-primary">
+              <i class="fa-solid fa-plus"></i> 添加公里
+            </button>
+          </div>
         </div>
 
         <div class="carbon-table-container">
