@@ -169,13 +169,15 @@ function renderHomePage() {
     .map(z => `<span><i style="background:${z.c}"></i><b>${z.z}</b> ${z.n} ${z.v}%</span>`).join("");
 
   // ---- Totals
-  let totalDist = 0, outdoor = 0, indoor = 0, cadSum = 0, cadN = 0, hrSum = 0, hrN = 0, monthDist = 0;
+  let totalDist = 0, outdoor = 0, indoor = 0, cadSum = 0, cadN = 0, hrSum = 0, hrN = 0, monthDist = 0, yearDist = 0;
   const monthPrefix = (latest.date || "").slice(0, 7);
+  const yearPrefix = (latest.date || "").slice(0, 4);
   allWorkouts.forEach(w => {
     const d = parseFloat(w.distance_km);
     if (!isNaN(d)) {
       totalDist += d;
       if ((w.date || "").startsWith(monthPrefix)) monthDist += d;
+      if ((w.date || "").startsWith(yearPrefix)) yearDist += d;
     }
     if (w.activity_type === "户外跑步") outdoor++;
     else if (w.activity_type === "室内跑步") indoor++;
@@ -193,8 +195,9 @@ function renderHomePage() {
   setNum("home-stat-distance", totalDist);
   setNum("home-stat-count", allWorkouts.length);
   setText("home-stat-split-type", `户外 ${outdoor} 次 · 室内 ${indoor} 次`);
-  setText("home-stat-month-label", `${monthPrefix} 月跑量`);
-  setNum("home-stat-month", monthDist);
+  setText("home-stat-year-label", `${yearPrefix} 年跑量`);
+  setNum("home-stat-year", yearDist);
+  setNum("home-latest-month", monthDist);
   setNum("home-stat-vo2max", latestVo2);
   setNum("home-stat-cadence", cadN ? Math.round(cadSum / cadN) : "--");
   setNum("home-stat-hr", hrN ? Math.round(hrSum / hrN) : "--");
