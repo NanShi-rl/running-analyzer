@@ -401,6 +401,14 @@ body.on-home main { padding: 0; max-width: none; }
 .home-display .accent { color: var(--green); }
 .home-eyebrow { font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 1.25rem; }
 .home-lead { font-size: 1.15rem; color: var(--muted); margin-top: 1.5rem; max-width: 34rem; }
+/* headline row: big heading on the left, small side stat on the right */
+.home-headline-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 2rem; }
+.home-side-stat { text-align: right; margin-left: auto; padding-bottom: .5rem; }
+.home-side-stat .lbl { font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.home-side-stat .val { font-weight: 300; font-size: clamp(2rem, 3.2vw, 2.9rem); line-height: 1.1; margin-top: .4rem; }
+.home-side-stat .val small { font-size: .8rem; color: var(--muted); margin-left: .35rem; }
+
+
 
 /* hero */
 .home-hero2 { position: relative; min-height: calc(100vh - 48px); padding: 7rem clamp(1.5rem, 7vw, 6rem) 12rem; background: var(--paper-2); overflow: hidden; }

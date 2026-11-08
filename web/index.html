@@ -109,11 +109,16 @@
       <!-- Section 2: Latest run -->
       <section class="home-section">
         <p class="home-eyebrow reveal">最近一次跑步 · <span id="home-latest-date">--</span></p>
-        <h2 class="home-display lg reveal" style="--d:100ms">
-          最近一跑，<br><em><span id="home-latest-distance" data-decimals="2">0</span> 公里</em><br>
-          配速 <span id="home-latest-pace-hl">--</span> / 公里<br>
-          本月累计 <em><span id="home-latest-month" data-decimals="2">0</span> 公里</em>
-        </h2>
+        <div class="home-headline-row">
+          <h2 class="home-display lg reveal" style="--d:100ms">
+            最近一跑，<br><em><span id="home-latest-distance" data-decimals="2">0</span> 公里</em><br>
+            配速 <span id="home-latest-pace-hl">--</span> / 公里
+          </h2>
+          <div class="home-side-stat reveal from-right" style="--d:250ms">
+            <p class="lbl">本月累计</p>
+            <p class="val"><span id="home-latest-month" data-decimals="2">0</span><small>公里</small></p>
+          </div>
+        </div>
 
         <div class="home-note-row">
           <div class="home-note green reveal from-left" style="--d:200ms">
